@@ -2,34 +2,53 @@ import requests
 import sys
 import os
 import json
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
-from PySide6.QtCore import Qt
 import string
 import random
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
+from PySide6.QtCore import Qt
 
-# Path to the file where key limits are stored
-KEY_LIMIT_FILE = "key_limits.json"
+# Path to the key limits file
+KEY_LIMITS_FILE = "key_limits.json"
 
 # Dictionary to store username and generated key
 generated_keys = {}
-
-# Function to load the key limit file or initialize it if it doesn't exist
-def load_key_limits():
-    if os.path.exists(KEY_LIMIT_FILE):
-        with open(KEY_LIMIT_FILE, 'r') as f:
-            return json.load(f)
-    else:
-        return {}
-
-# Function to save the updated key limits to the file
-def save_key_limits(key_limits):
-    with open(KEY_LIMIT_FILE, 'w') as f:
-        json.dump(key_limits, f, indent=4)
 
 # Function to generate a random key (based on username)
 def generate_key_from_username(username):
     random.seed(username)
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+
+# Function to load key limits from the JSON file
+def load_key_limits():
+    """Load the key limits from the JSON file."""
+    if os.path.exists(KEY_LIMITS_FILE):
+        with open(KEY_LIMITS_FILE, 'r') as f:
+            return json.load(f)
+    else:
+        return {}  # Return empty dictionary if file doesn't exist
+
+# Function to save the key limits to the JSON file
+def save_key_limits(key_limits):
+    """Save the key limits to the JSON file."""
+    with open(KEY_LIMITS_FILE, 'w') as f:
+        json.dump(key_limits, f, indent=4)
+
+# Function to check if the user can generate a key
+def can_generate_key(username):
+    """Check if the user can generate a key."""
+    key_limits = load_key_limits()
+
+    if username not in key_limits:
+        print(f"User {username} does not have key generation permissions.")
+        return False  # User does not exist in the list
+
+    if key_limits[username] > 0:
+        key_limits[username] -= 1  # Decrease the count by 1 for each key generation
+        save_key_limits(key_limits)  # Save updated key limits back to the file
+        return True
+    else:
+        print(f"User {username} has reached their key generation limit.")
+        return False  # User has exceeded their key generation limit
 
 # Function to send logs to Discord webhook with an embed
 def send_to_discord_with_embed(username, key, action):
@@ -81,34 +100,6 @@ def unblock_roblox(username, key):
     os.system("netsh advfirewall firewall delete rule name='BlockRoblox'")
     print(f"Roblox connection restored for {username} using key {key}!")  # Simulate the Roblox reconnect
     send_to_discord_with_embed(username, key, "End Dupe")
-
-# Function to check if the user can generate a key
-def can_generate_key(username):
-    key_limits = load_key_limits()
-
-    if username not in key_limits:
-        print(f"User {username} does not have key generation permissions.")
-        return False  # User does not exist in the list
-
-    # Check if the user has remaining keys to generate
-    if key_limits[username] > 0:
-        key_limits[username] -= 1  # Decrease the count by 1 for each key generation
-        save_key_limits(key_limits)
-        return True
-    else:
-        print(f"User {username} has reached their key generation limit.")
-        return False  # User has exceeded their key generation limit
-
-# Function to generate a key for the user
-def generate_key_for_user(username):
-    if can_generate_key(username):
-        # Here, generate the key as per your current logic
-        key = generate_key_from_username(username)
-        print(f"Generated key for {username}: {key}")
-        return key
-    else:
-        print(f"Could not generate key for {username}.")
-        return None
 
 class TactDupeApp(QWidget):
     def __init__(self):
@@ -207,9 +198,10 @@ class TactDupeApp(QWidget):
             QMessageBox.warning(self, "Input Error", "Please enter a username before proceeding.")
             return
 
-        # Generate a key based on the username
-        key = generate_key_for_user(username)
-        if key:
+        # Check if the user can generate a key
+        if can_generate_key(username):
+            # Generate a key based on the username
+            key = generate_key_from_username(username)
             generated_keys[username] = key  # Store the generated key with the username
             print(f"Generated key for {username}: {key}")
 
@@ -220,7 +212,7 @@ class TactDupeApp(QWidget):
             else:
                 QMessageBox.warning(self, "Error", "Failed to send data to Discord. Please check your connection.")
         else:
-            QMessageBox.warning(self, "Key Limit Reached", "You have reached your key generation limit.")
+            QMessageBox.warning(self, "Key Generation Limit Reached", "You have reached your key generation limit.")
 
     def validate_key(self):
         entered_key = self.key_input.text()
