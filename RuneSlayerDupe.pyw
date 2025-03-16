@@ -1,14 +1,14 @@
-import requests
 import sys
 import os
-import json
 import string
 import random
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
-from PySide6.QtCore import Qt
-
-# Path to the key limits file
-KEY_LIMITS_FILE = "key_limits.json"
+import requests
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget, QHBoxLayout
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QColor
+import cryptography
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 
 # Dictionary to store username and generated key
 generated_keys = {}
@@ -17,38 +17,6 @@ generated_keys = {}
 def generate_key_from_username(username):
     random.seed(username)
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-
-# Function to load key limits from the JSON file
-def load_key_limits():
-    """Load the key limits from the JSON file."""
-    if os.path.exists(KEY_LIMITS_FILE):
-        with open(KEY_LIMITS_FILE, 'r') as f:
-            return json.load(f)
-    else:
-        return {}  # Return empty dictionary if file doesn't exist
-
-# Function to save the key limits to the JSON file
-def save_key_limits(key_limits):
-    """Save the key limits to the JSON file."""
-    with open(KEY_LIMITS_FILE, 'w') as f:
-        json.dump(key_limits, f, indent=4)
-
-# Function to check if the user can generate a key
-def can_generate_key(username):
-    """Check if the user can generate a key."""
-    key_limits = load_key_limits()
-
-    if username not in key_limits:
-        print(f"User {username} does not have key generation permissions.")
-        return False  # User does not exist in the list
-
-    if key_limits[username] > 0:
-        key_limits[username] -= 1  # Decrease the count by 1 for each key generation
-        save_key_limits(key_limits)  # Save updated key limits back to the file
-        return True
-    else:
-        print(f"User {username} has reached their key generation limit.")
-        return False  # User has exceeded their key generation limit
 
 # Function to send logs to Discord webhook with an embed
 def send_to_discord_with_embed(username, key, action):
@@ -106,9 +74,9 @@ class TactDupeApp(QWidget):
         super().__init__()
 
         # Window settings
-        self.setWindowTitle("Tact Dupe Tool")
-        self.setFixedSize(400, 300)
-        self.setStyleSheet("background-color: #1a1a1a; color: #ffffff; font-family: Arial;")
+        self.setWindowTitle("Tact RuneSlayer Dupe")
+        self.setFixedSize(500, 350)
+        self.setStyleSheet("background-color: #2e2e2e; color: #ffffff; font-family: 'Segoe UI';")
 
         self.init_ui()
 
@@ -120,18 +88,18 @@ class TactDupeApp(QWidget):
         self.page1 = QWidget()
         self.page1_layout = QVBoxLayout()
 
-        title_label = QLabel("Runeslayer Dupe", self)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 20px; color: #CB6CE6; font-weight: bold;")
+        title_label = QLabel("Tact RuneSlayer Dupe", self)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; color: #CB6CE6; font-weight: bold;")
         self.page1_layout.addWidget(title_label)
 
         self.username_input = QLineEdit(self)
         self.username_input.setPlaceholderText("Enter your Username")
-        self.username_input.setStyleSheet("background-color: #333333; border: 1px solid #CB6CE6; padding: 10px;")
+        self.username_input.setStyleSheet("background-color: #3d3d3d; border: 1px solid #CB6CE6; padding: 12px; border-radius: 8px;")
         self.page1_layout.addWidget(self.username_input)
 
         generate_button = QPushButton("Generate Key", self)
-        generate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
+        generate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 12px; font-size: 16px; border-radius: 8px;")
         generate_button.clicked.connect(self.generate_key)
         self.page1_layout.addWidget(generate_button)
 
@@ -142,17 +110,17 @@ class TactDupeApp(QWidget):
         self.page2_layout = QVBoxLayout()
 
         self.key_label = QLabel("Enter the key that was sent to you", self)
-        self.key_label.setAlignment(Qt.AlignCenter)
-        self.key_label.setStyleSheet("font-size: 16px; color: #CB6CE6; font-weight: bold;")
+        self.key_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.key_label.setStyleSheet("font-size: 18px; color: #CB6CE6; font-weight: bold;")
         self.page2_layout.addWidget(self.key_label)
 
         self.key_input = QLineEdit(self)
         self.key_input.setPlaceholderText("Enter your Key")
-        self.key_input.setStyleSheet("background-color: #333333; border: 1px solid #CB6CE6; padding: 10px;")
+        self.key_input.setStyleSheet("background-color: #3d3d3d; border: 1px solid #CB6CE6; padding: 12px; border-radius: 8px;")
         self.page2_layout.addWidget(self.key_input)
 
         validate_button = QPushButton("Validate Key", self)
-        validate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
+        validate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 12px; font-size: 16px; border-radius: 8px;")
         validate_button.clicked.connect(self.validate_key)
         self.page2_layout.addWidget(validate_button)
 
@@ -163,17 +131,17 @@ class TactDupeApp(QWidget):
         self.page3_layout = QVBoxLayout()
 
         self.dupe_label = QLabel("Tact RuneSlayer Dupe", self)
-        self.dupe_label.setAlignment(Qt.AlignCenter)
-        self.dupe_label.setStyleSheet("font-size: 20px; color: #CB6CE6; font-weight: bold;")
+        self.dupe_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dupe_label.setStyleSheet("font-size: 24px; color: #CB6CE6; font-weight: bold;")
         self.page3_layout.addWidget(self.dupe_label)
 
         self.dupe_button = QPushButton("Start Dupe", self)
-        self.dupe_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
+        self.dupe_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 12px; font-size: 16px; border-radius: 8px;")
         self.dupe_button.clicked.connect(self.block_roblox)
         self.page3_layout.addWidget(self.dupe_button)
 
         self.end_dupe_button = QPushButton("End Dupe", self)
-        self.end_dupe_button.setStyleSheet("background-color: #e74c3c; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
+        self.end_dupe_button.setStyleSheet("background-color: #e74c3c; color: #ffffff; border: none; padding: 12px; font-size: 16px; border-radius: 8px;")
         self.end_dupe_button.clicked.connect(self.unblock_roblox)
         self.page3_layout.addWidget(self.end_dupe_button)
 
@@ -198,21 +166,17 @@ class TactDupeApp(QWidget):
             QMessageBox.warning(self, "Input Error", "Please enter a username before proceeding.")
             return
 
-        # Check if the user can generate a key
-        if can_generate_key(username):
-            # Generate a key based on the username
-            key = generate_key_from_username(username)
-            generated_keys[username] = key  # Store the generated key with the username
-            print(f"Generated key for {username}: {key}")
+        # Generate a key based on the username
+        key = generate_key_from_username(username)
+        generated_keys[username] = key  # Store the generated key with the username
+        print(f"Generated key for {username}: {key}")
 
-            # Send key and username to Discord with embed
-            if send_to_discord_with_embed(username, key, "Generated Key"):
-                # Move to the next page if the webhook is successful
-                self.stacked_widget.setCurrentIndex(1)  # Switch to the next page for key entry
-            else:
-                QMessageBox.warning(self, "Error", "Failed to send data to Discord. Please check your connection.")
+        # Send key and username to Discord with embed
+        if send_to_discord_with_embed(username, key, "Generated Key"):
+            # Move to the next page if the webhook is successful
+            self.stacked_widget.setCurrentIndex(1)  # Switch to the next page for key entry
         else:
-            QMessageBox.warning(self, "Key Generation Limit Reached", "You have reached your key generation limit.")
+            QMessageBox.warning(self, "Error", "Failed to send data to Discord. Please check your connection.")
 
     def validate_key(self):
         entered_key = self.key_input.text()
