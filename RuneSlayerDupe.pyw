@@ -1,10 +1,13 @@
-import random
-import string
 import requests
-import os
 import sys
+import os
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
 from PySide6.QtCore import Qt
+import string
+import random
+import cryptography
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
 
 # Dictionary to store username and generated key
 generated_keys = {}
