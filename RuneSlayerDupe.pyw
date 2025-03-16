@@ -73,7 +73,7 @@ class TactDupeApp(QWidget):
         super().__init__()
 
         # Window settings
-        self.setWindowTitle("Tact RuneSlayer Dupe")
+        self.setWindowTitle("Tact Dupe Tool")
         self.setFixedSize(400, 300)
         self.setStyleSheet("background-color: #1a1a1a; color: #ffffff; font-family: Arial;")
 
@@ -87,7 +87,7 @@ class TactDupeApp(QWidget):
         self.page1 = QWidget()
         self.page1_layout = QVBoxLayout()
 
-        title_label = QLabel("Tact RuneSlayer Dupe", self)
+        title_label = QLabel("Runeslayer Dupe", self)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("font-size: 20px; color: #CB6CE6; font-weight: bold;")
         self.page1_layout.addWidget(title_label)
