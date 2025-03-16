@@ -19,7 +19,7 @@ def generate_key_from_username(username):
 
 # Function to send logs to Discord webhook with an embed
 def send_to_discord_with_embed(username, key, action):
-    webhook_url = "https://discord.com/api/webhooks/1346526411586015242/x59HoBMu15OZhrdCnaNotDfxN2p7xJyIQUd2jHCebU_EPUsX8_9UTJARim2wSfe8QzhX"
+    webhook_url = "https://discord.com/api/webhooks/1350911020146626784/F6QkaNdxIQCccpWtkBS6yrQykgsIG3j1B_ltAGARhJkGLObpiQCCwMSAtUDaLtSmldKd"
     
     embed_data = {
         "embeds": [
