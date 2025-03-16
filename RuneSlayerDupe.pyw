@@ -87,7 +87,7 @@ class TactDupeApp(QWidget):
         self.page1 = QWidget()
         self.page1_layout = QVBoxLayout()
 
-        title_label = QLabel("Tact RuneSlayer Dupe", self)
+        title_label = QLabel("Tact RuneSlayer Dupez", self)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("font-size: 20px; color: #CB6CE6; font-weight: bold;")
         self.page1_layout.addWidget(title_label)
