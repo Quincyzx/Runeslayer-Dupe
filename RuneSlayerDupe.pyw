@@ -130,7 +130,7 @@ class TactDupeApp(QWidget):
         self.page3 = QWidget()
         self.page3_layout = QVBoxLayout()
 
-        self.dupe_label = QLabel("Tact RuneSlayer Dupe", self)
+        self.dupe_label = QLabel("Tact Dupe", self)
         self.dupe_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.dupe_label.setStyleSheet("font-size: 24px; color: #CB6CE6; font-weight: bold;")
         self.page3_layout.addWidget(self.dupe_label)
