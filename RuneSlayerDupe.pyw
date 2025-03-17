@@ -46,13 +46,25 @@ def load_keys():
         log_error(f"Error loading {KEYS_FILENAME}: {e}")
         return {}
 
-# Function to perform the dupe action
-def dupe_action():
-    """Simulates the dupe action."""
-    print("Performing the dupe action...")
+# Function to get the sha of keys.json from GitHub
+def get_sha_of_file():
+    """Fetches the SHA of keys.json from GitHub to update it."""
+    try:
+        api_url = f"https://api.github.com/repos/Quincyzx/Runeslayer-Dupe/contents/keys.json"
+        response = requests.get(api_url, headers=HEADERS)
+
+        if response.status_code == 200:
+            file_data = response.json()
+            return file_data.get('sha')
+        else:
+            log_error(f"Error fetching sha of keys.json: {response.status_code}")
+            return None
+    except requests.exceptions.RequestException as e:
+        log_error(f"Error fetching sha of keys.json: {e}")
+        return None
 
 # Function to save the updated keys back to GitHub
-def save_keys_to_github(keys):
+def save_keys_to_github(keys, sha):
     """Saves the updated keys back to GitHub."""
     try:
         print("Saving updated keys.json to GitHub...")
@@ -62,7 +74,8 @@ def save_keys_to_github(keys):
 
         data = {
             "message": "Update keys.json after performing dupe action",
-            "content": encoded_content
+            "content": encoded_content,
+            "sha": sha  # Adding the SHA here
         }
 
         response = requests.put(update_url, json=data, headers=HEADERS)
@@ -73,6 +86,11 @@ def save_keys_to_github(keys):
             log_error(f"Error updating keys.json on GitHub: {response.status_code} - {response.text}")
     except requests.exceptions.RequestException as e:
         log_error(f"Error saving keys.json to GitHub: {e}")
+
+# Function to perform the dupe action
+def dupe_action():
+    """Simulates the dupe action."""
+    print("Performing the dupe action...")
 
 # Main logic for the script
 if __name__ == "__main__":
@@ -101,8 +119,14 @@ if __name__ == "__main__":
                 keys[username]["keys_left"] = current_keys_left - 1
                 print(f"Updated keys_left for {username}: {keys[username]['keys_left']}")
 
-                # Step 3: Save the updated keys back to GitHub
-                save_keys_to_github(keys)
+                # Step 3: Get the SHA of the current keys.json file
+                sha = get_sha_of_file()
+
+                if sha:
+                    # Step 4: Save the updated keys back to GitHub
+                    save_keys_to_github(keys, sha)
+                else:
+                    log_error("Failed to fetch SHA for keys.json.")
             else:
                 print(f"No keys left for {username}. Cannot perform dupe.")
                 log_error(f"No keys left for {username}. Cannot perform dupe.")
