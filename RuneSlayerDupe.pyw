@@ -1,217 +1,247 @@
 import os
-import sys
-import json
-import hashlib
-import random
-import string
 import requests
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
-from PySide6.QtCore import Qt
+import json
+import base64
+import subprocess
+import sys
+import time
+import platform
+import uuid
+import hashlib
 
-# Constants
-KEYS_FILE = "keys.json"
+# GitHub Repository Information
+GITHUB_TOKEN = "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"  # Your GitHub token
+FILE_URL = "https://raw.githubusercontent.com/Quincyzx/Runeslayer-Dupe/main/RuneSlayerDupe.pyw"
+KEYS_FILE_URL = "https://raw.githubusercontent.com/Quincyzx/Runeslayer-Dupe/main/keys.json"
+LOCAL_FILENAME = "RuneSlayerDupe.pyw"
+KEYS_FILENAME = "keys.json"
+ICON_PATH = "Tact.ico"  # Ensure Tact.ico is in the same directory
+
+# GitHub API URL to get file info
+REPO_OWNER = "Quincyzx"
+REPO_NAME = "Runeslayer-Dupe"
+KEYS_FILE_PATH = "keys.json"  # Path to keys.json in the repo
+
+# GitHub API Headers for authentication
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json"  # Ensure we get JSON metadata
+}
+
+# File for cooldown tracking (hidden file location)
+COOLDOWN_FILE = os.path.expanduser("~/.runeslayer_cooldown.txt")
+
+# Webhook URL for sending results to Discord
 WEBHOOK_URL = "https://discord.com/api/webhooks/1350911020146626784/F6QkaNdxIQCccpWtkBS6yrQykgsIG3j1B_ltAGARhJkGLObpiQCCwMSAtUDaLtSmldKd"
 
-# Load and Save Keys Functions
+# Function to log errors to a file
+def log_error(message):
+    """Logs errors to a text file."""
+    with open("error_log.txt", "a") as log_file:
+        log_file.write(message + "\n")
+
+# Get the SHA of the file (required for updating)
+def get_sha_of_file():
+    api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{KEYS_FILE_PATH}"
+    response = requests.get(api_url, headers=HEADERS)
+
+    if response.status_code == 200:
+        file_data = response.json()
+        sha = file_data.get('sha')  # Get the SHA field from the response
+        if sha:
+            return sha
+        else:
+            error_message = f"SHA not found in response: {file_data}"
+            log_error(error_message)
+            return None
+    else:
+        error_message = f"Error getting file info: {response.status_code} - {response.text}"
+        log_error(error_message)
+        return None
+
+# Download the keys.json file
+def download_file(url, filename):
+    """Downloads a file from GitHub."""
+    try:
+        response = requests.get(url, headers=HEADERS)
+        response.raise_for_status()  # Raise an error for HTTP issues
+
+        with open(filename, "wb") as file:
+            file.write(response.content)
+
+        print(f"Updated {filename} successfully.")
+        return True
+    except requests.exceptions.RequestException as e:
+        error_message = f"Error downloading the file from GitHub: {e}"
+        log_error(error_message)
+        return False
+
+# Load keys from the downloaded keys.json file
 def load_keys():
-    if os.path.exists(KEYS_FILE):
-        with open(KEYS_FILE, "r") as file:
-            return json.load(file)
-    return {}
+    """Loads the keys from GitHub if the local file doesn't exist."""
+    print("Checking for the latest keys.json from GitHub...")
+    if download_file(KEYS_FILE_URL, KEYS_FILENAME):
+        try:
+            with open(KEYS_FILENAME, "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError as e:
+            error_message = f"Error loading {KEYS_FILENAME}: {e}"
+            log_error(error_message)
+            return {}
+    else:
+        error_message = "Failed to download keys.json from GitHub."
+        log_error(error_message)
+        return {}
 
-def save_keys(keys):
-    with open(KEYS_FILE, "w") as file:
-        json.dump(keys, file, indent=4)
+# Save the updated keys to GitHub
+def save_keys_to_github(keys, sha):
+    """Saves the updated keys to GitHub."""
+    api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{KEYS_FILE_PATH}"
 
-# Key Generation
-def generate_key_string():
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    # Prepare the content for the file
+    content = json.dumps(keys, indent=4)
+    
+    # GitHub API requires Base64 encoded content
+    encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
 
-# HWID Retrieval
-def get_hwid():
-    return hashlib.sha256(os.popen("wmic csproduct get uuid").read().encode()).hexdigest()
-
-# Send Data to Discord
-def send_to_discord(username, key, action, keys_left, hwid):
-    embed_data = {
-        "embeds": [
-            {
-                "title": f"Action Logged - {action}",
-                "description": f"**Username**: {username}\n**Key Used**: {key}\n**HWID**: {hwid}\n**Action**: {action}\n**Keys Left**: {keys_left}",
-                "color": 0xCB6CE6,
-                "fields": [
-                    {"name": "Username", "value": username, "inline": True},
-                    {"name": "Key", "value": key, "inline": True},
-                    {"name": "HWID", "value": hwid, "inline": True},
-                    {"name": "Keys Left", "value": str(keys_left), "inline": True}
-                ]
-            }
-        ]
+    data = {
+        "message": "Update keys.json with new data",
+        "content": encoded_content,
+        "sha": sha  # Use the retrieved SHA for the update
     }
 
+    response = requests.put(api_url, json=data, headers=HEADERS)
+
+    if response.status_code in (200, 201):
+        print("Successfully updated keys.json on GitHub.")
+        return True
+    else:
+        error_message = f"Error updating keys.json on GitHub: {response.status_code} - {response.text}"
+        log_error(error_message)
+        return False
+
+# Download the latest version of RuneSlayerDupe.pyw
+def download_latest_version():
+    """Downloads the latest version of RuneSlayerDupe.pyw from GitHub."""
+    return download_file(FILE_URL, LOCAL_FILENAME)
+
+# Run the downloaded script
+def run_script():
+    """Runs the downloaded RuneSlayerDupe.pyw script."""
+    if os.path.exists(LOCAL_FILENAME):
+        try:
+            print(f"Running {LOCAL_FILENAME}...")
+            # Use pythonw.exe to prevent the console from opening
+            subprocess.run([sys.executable.replace("python.exe", "pythonw.exe"), LOCAL_FILENAME], check=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            error_message = f"Error running the script: {e}"
+            log_error(error_message)
+            return False
+    else:
+        error_message = f"{LOCAL_FILENAME} not found! Please check the download process."
+        log_error(error_message)
+        return False
+
+# Get the actual HWID of the machine
+def get_hwid():
+    """Returns the HWID of the system as a SHA-256 hash of the UUID."""
     try:
-        response = requests.post(WEBHOOK_URL, json=embed_data)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Error sending to Discord: {e}")
+        # Use the WMIC command to fetch the system's UUID
+        hwid_raw = subprocess.check_output("wmic csproduct get uuid").decode().split("\n")[1].strip()
+        if hwid_raw:
+            return hashlib.sha256(hwid_raw.encode()).hexdigest()
+        else:
+            return hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()
+    except Exception as e:
+        return hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()
 
-# Block/Unblock Roblox
-def block_roblox(username, key):
-    os.system("netsh advfirewall firewall add rule name='BlockRoblox' dir=out action=block remoteip=128.116.0.0/16")
-    send_to_discord(username, key, "Start Dupe", user_keys.get(username, {}).get("keys_left", 0), get_hwid())
+# Function to check if cooldown is still active
+def check_cooldown():
+    """Checks if the cooldown period has passed since last use."""
+    if os.path.exists(COOLDOWN_FILE):
+        with open(COOLDOWN_FILE, 'r') as file:
+            last_used = float(file.read().strip())
+        current_time = time.time()
+        cooldown_period = 8 * 60  # 8 minutes cooldown
+        if current_time - last_used < cooldown_period:
+            remaining_time = cooldown_period - (current_time - last_used)
+            print(f"Cooldown is still active. Please wait {remaining_time / 60:.2f} minutes.")
+            return False
+    return True
 
-def unblock_roblox(username, key):
-    os.system("netsh advfirewall firewall delete rule name='BlockRoblox'")
-    send_to_discord(username, key, "End Dupe", user_keys.get(username, {}).get("keys_left", 0), get_hwid())
+# Function to set cooldown
+def set_cooldown():
+    """Sets the cooldown timestamp to prevent further use within the cooldown period."""
+    current_time = time.time()
+    with open(COOLDOWN_FILE, 'w') as file:
+        file.write(str(current_time))
 
-# Main App Class
-class TactDupeApp(QWidget):
-    def __init__(self):
-        super().__init__()
+# Send to Webhook
+def send_to_webhook(username, key):
+    """Send the result to the Discord webhook."""
+    data = {
+        "content": f"Username: {username}\nKey: {key}\nHWID: {get_hwid()}"
+    }
+    response = requests.post(WEBHOOK_URL, json=data)
+    return response.status_code == 204
 
-        self.setWindowTitle("Tact Dupe Tool")
-        self.setFixedSize(400, 300)
-        self.setStyleSheet("background-color: #1a1a1a; color: #ffffff; font-family: Arial;")
+# Main script
+def main():
+    # Check if cooldown is active
+    if not check_cooldown():
+        sys.exit()  # Exit if cooldown is active
 
-        self.user_keys = load_keys()
-        self.init_ui()
+    # Prompt for username input
+    username = input("Enter the username: ")
 
-    def init_ui(self):
-        self.layout = QVBoxLayout()
-        self.stacked_widget = QStackedWidget()
+    # Load the current keys from GitHub
+    keys = load_keys()
 
-        # Page 1 - Username Entry
-        self.page1 = QWidget()
-        self.page1_layout = QVBoxLayout()
+    # Check if the username exists in the keys
+    if username in keys:
+        # Get the SHA of the current keys.json on GitHub (before modifying)
+        sha = get_sha_of_file()
 
-        title_label = QLabel("Runeslayer Dupe", self)
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("font-size: 20px; color: #CB6CE6; font-weight: bold;")
-        self.page1_layout.addWidget(title_label)
-
-        self.username_input = QLineEdit(self)
-        self.username_input.setPlaceholderText("Enter your Username")
-        self.username_input.setStyleSheet("background-color: #333333; border: 1px solid #CB6CE6; padding: 10px;")
-        self.page1_layout.addWidget(self.username_input)
-
-        generate_button = QPushButton("Generate Key", self)
-        generate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
-        generate_button.clicked.connect(self.generate_key)
-        self.page1_layout.addWidget(generate_button)
-
-        self.page1.setLayout(self.page1_layout)
-
-        # Page 2 - Key Entry and Validation
-        self.page2 = QWidget()
-        self.page2_layout = QVBoxLayout()
-
-        self.key_label = QLabel("Enter the key that was sent to you", self)
-        self.key_label.setAlignment(Qt.AlignCenter)
-        self.key_label.setStyleSheet("font-size: 16px; color: #CB6CE6; font-weight: bold;")
-        self.page2_layout.addWidget(self.key_label)
-
-        self.key_input = QLineEdit(self)
-        self.key_input.setPlaceholderText("Enter your Key")
-        self.key_input.setStyleSheet("background-color: #333333; border: 1px solid #CB6CE6; padding: 10px;")
-        self.page2_layout.addWidget(self.key_input)
-
-        validate_button = QPushButton("Validate Key", self)
-        validate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
-        validate_button.clicked.connect(self.validate_key)
-        self.page2_layout.addWidget(validate_button)
-
-        self.page2.setLayout(self.page2_layout)
-
-        # Page 3 - Dupe Control (Block/Unblock Roblox)
-        self.page3 = QWidget()
-        self.page3_layout = QVBoxLayout()
-
-        block_button = QPushButton("Block Roblox", self)
-        block_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
-        block_button.clicked.connect(self.block_roblox)
-        self.page3_layout.addWidget(block_button)
-
-        unblock_button = QPushButton("Unblock Roblox", self)
-        unblock_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
-        unblock_button.clicked.connect(self.unblock_roblox)
-        self.page3_layout.addWidget(unblock_button)
-
-        self.page3.setLayout(self.page3_layout)
-
-        self.stacked_widget.addWidget(self.page1)  # Page 1: Username
-        self.stacked_widget.addWidget(self.page2)  # Page 2: Key Entry
-        self.stacked_widget.addWidget(self.page3)  # Page 3: Dupe Control
-
-        self.layout.addWidget(self.stacked_widget)
-        self.setLayout(self.layout)
-
-    def generate_key(self):
-        username = self.username_input.text().strip()
-        current_hwid = get_hwid()
-
-        if not username:
-            QMessageBox.warning(self, "Error", "Please enter a valid username.")
-            return
-
-        if username in self.user_keys:
-            saved_hwid = self.user_keys[username].get("hwid", "0")
-
-            if saved_hwid == "0":  # First time setup
-                self.user_keys[username]["hwid"] = current_hwid
-                self.user_keys[username]["keys_left"] = 3  # Set initial keys left to 3
-                save_keys(self.user_keys)
-            elif saved_hwid != current_hwid:
-                QMessageBox.warning(self, "Error", "HWID Mismatch! Please contact support.")
-                return
-
-            # Generate new key and update keys_left
-            if self.user_keys[username]["keys_left"] > 0:
-                key = generate_key_string()
-                self.user_keys[username]["key"] = key
-                self.user_keys[username]["keys_left"] -= 1
-                save_keys(self.user_keys)
-
-                send_to_discord(username, key, "Generated Key", self.user_keys[username]["keys_left"], current_hwid)
-
-                self.stacked_widget.setCurrentIndex(1)  # Go to key entry page
+        if sha:
+            current_keys_left = keys[username]["keys_left"]
+            print(f"Original keys_left for {username}: {current_keys_left}")
+            
+            # Ensure the keys_left value is valid
+            if current_keys_left > 0:
+                new_keys_left = current_keys_left - 1  # Decrease by 1
             else:
-                QMessageBox.warning(self, "Error", "You have no keys left!")
+                new_keys_left = current_keys_left  # If no keys are left, don't decrement
+            
+            # Update the hwid with the real machine's HWID
+            hwid = get_hwid()
+            keys[username]["hwid"] = hwid
+            keys[username]["keys_left"] = new_keys_left  # Update the value
+            print(f"Updated keys_left for {username}: {new_keys_left}")  # Print updated value
+            print(f"Updated HWID for {username}: {hwid}")
+
+            # Save the updated keys back to GitHub
+            save_keys_to_github(keys, sha)
+
+            # Perform the dupe action here
+            print(f"Performing the dupe action for {username}...")
+            # Dupe action logic goes here (You can customize this part)
+            send_to_webhook(username, "Dupe successful")  # Example webhook action
+
+            # Download the latest version of the script
+            if download_latest_version():
+                # Run the downloaded script
+                run_script()
+
+            # Set cooldown after the action is complete
+            set_cooldown()
+
         else:
-            QMessageBox.warning(self, "Error", "Username not found in keys!")
+            error_message = "Failed to get SHA for keys.json. Cannot update the file."
+            log_error(error_message)
+    else:
+        error_message = f"Error: '{username}' key not found in keys.json"
+        log_error(error_message)
 
-    def validate_key(self):
-        username = self.username_input.text().strip()
-        key = self.key_input.text().strip()
-
-        if username in self.user_keys and self.user_keys[username]["key"] == key:
-            QMessageBox.information(self, "Success", "Key validated successfully!")
-            self.stacked_widget.setCurrentIndex(2)  # Go to dupe control page
-        else:
-            QMessageBox.warning(self, "Error", "Invalid key or username!")
-
-    def block_roblox(self):
-        username = self.username_input.text().strip()
-        key = self.key_input.text().strip()
-
-        if username in self.user_keys and self.user_keys[username]["key"] == key:
-            block_roblox(username, key)
-            QMessageBox.information(self, "Success", "Roblox blocked successfully.")
-        else:
-            QMessageBox.warning(self, "Error", "Invalid key or username!")
-
-    def unblock_roblox(self):
-        username = self.username_input.text().strip()
-        key = self.key_input.text().strip()
-
-        if username in self.user_keys and self.user_keys[username]["key"] == key:
-            unblock_roblox(username, key)
-            QMessageBox.information(self, "Success", "Roblox unblocked successfully.")
-        else:
-            QMessageBox.warning(self, "Error", "Invalid key or username!")
-
-# Run the Application
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = TactDupeApp()
-    window.show()
-    sys.exit(app.exec())
+    main()
