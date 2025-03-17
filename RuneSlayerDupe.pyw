@@ -4,37 +4,91 @@ import json
 import string
 import random
 import requests
+import uuid
+import hashlib
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
 from PySide6.QtCore import Qt
 
 # Dictionary to store username and generated key
 generated_keys = {}
 
-# Function to generate a random key (based on username)
-def generate_key_from_username(username):
-    # Create a deterministic but seemingly random key
-    # This ensures the same username always gets the same key
-    random.seed(username)
-    key = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    random.seed()  # Reset the seed
-    return key
+# Function to get the hardware ID of the current machine
+def get_hardware_id():
+    # Create a unique hardware ID based on machine-specific identifiers
+    # This combines multiple system identifiers for a more robust HWID
+    try:
+        # Get system UUID
+        system_uuid = str(uuid.uuid1()).encode()
+        
+        # Get MAC address (first available)
+        mac = uuid.getnode()
+        mac_bytes = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2)).encode()
+        
+        # Get computer name
+        computer_name = os.environ.get('COMPUTERNAME', os.environ.get('HOSTNAME', '')).encode()
+        
+        # Combine and hash to create a stable HWID
+        combined = system_uuid + mac_bytes + computer_name
+        hwid = hashlib.sha256(combined).hexdigest()
+        return hwid
+    except Exception as e:
+        print(f"Error getting HWID: {e}")
+        # Fallback to a simple UUID-based identifier if there's an error
+        return hashlib.sha256(str(uuid.uuid4()).encode()).hexdigest()
 
-# Function to check if key exists in the GitHub keys.json
-def validate_key_with_github(username, key):
-    # For this version, we're just checking against the locally generated key
-    # In a real implementation, you would check against a server or GitHub repo
-    expected_key = generate_key_from_username(username)
-    return key == expected_key
+# Function to generate a unique key (based on username and a random component)
+def generate_key(username):
+    # Create a key that combines username hash with randomness
+    # This ensures keys are unique even for the same username
+    username_hash = hashlib.md5(username.encode()).hexdigest()[:6]
+    random_part = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+    return f"{username_hash}-{random_part}"
+
+# Function to check if key exists in the keys.json from GitHub
+def validate_key_with_github(username, key, hwid):
+    # Load the keys.json file
+    try:
+        if os.path.exists("keys.json"):
+            with open("keys.json", "r") as f:
+                keys_data = json.load(f)
+                
+            # Check if username exists and key matches
+            if username in keys_data:
+                stored_key = keys_data[username].get("key", "")
+                stored_hwid = keys_data[username].get("hwid", "0")
+                
+                # Validate key
+                if stored_key != key:
+                    return False, "Invalid key for this username"
+                
+                # Check HWID
+                if stored_hwid == "0":
+                    # First-time use, update HWID
+                    keys_data[username]["hwid"] = hwid
+                    with open("keys.json", "w") as f:
+                        json.dump(keys_data, f, indent=4)
+                    return True, "First-time use, HWID registered"
+                elif stored_hwid != hwid:
+                    return False, "HWID mismatch - this key is registered to another device"
+                    
+                return True, "Key validated successfully"
+            else:
+                return False, "Username not found"
+        else:
+            return False, "Keys file not found"
+    except Exception as e:
+        print(f"Error validating key: {e}")
+        return False, f"Error validating key: {str(e)}"
 
 # Function to send logs to Discord webhook with an embed
-def send_to_discord_with_embed(username, key, action):
+def send_to_discord_with_embed(username, key, action, hwid):
     webhook_url = "https://discord.com/api/webhooks/1350911020146626784/F6QkaNdxIQCccpWtkBS6yrQykgsIG3j1B_ltAGARhJkGLObpiQCCwMSAtUDaLtSmldKd"
     
     embed_data = {
         "embeds": [
             {
                 "title": f"Action Logged - {action}",
-                "description": f"**Username**: {username}\n**Key Used**: {key}\n**Action**: {action}",
+                "description": f"**Username**: {username}\n**Key Used**: {key}\n**Action**: {action}\n**HWID**: {hwid}",
                 "color": 0xCB6CE6,  # Purple color
                 "fields": [
                     {
@@ -51,6 +105,11 @@ def send_to_discord_with_embed(username, key, action):
                         "name": "Action",
                         "value": action,
                         "inline": True
+                    },
+                    {
+                        "name": "HWID",
+                        "value": hwid,
+                        "inline": False
                     }
                 ]
             }
@@ -69,13 +128,13 @@ def send_to_discord_with_embed(username, key, action):
 def block_roblox(username, key):
     os.system("netsh advfirewall firewall add rule name='BlockRoblox' dir=out action=block remoteip=128.116.0.0/16")
     print(f"Roblox connection blocked for {username} using key {key}!")  # Simulate the Roblox blocking
-    send_to_discord_with_embed(username, key, "Start Dupe")
+    send_to_discord_with_embed(username, key, "Start Dupe", get_hardware_id())
 
 # Function to unblock Roblox (simulate reconnect)
 def unblock_roblox(username, key):
     os.system("netsh advfirewall firewall delete rule name='BlockRoblox'")
     print(f"Roblox connection restored for {username} using key {key}!")  # Simulate the Roblox reconnect
-    send_to_discord_with_embed(username, key, "End Dupe")
+    send_to_discord_with_embed(username, key, "End Dupe", get_hardware_id())
 
 # Load config from launcher
 def load_config():
@@ -102,6 +161,10 @@ class TactDupeApp(QWidget):
         
         # Load config from launcher if available
         self.config = load_config()
+        
+        # Store hardware ID
+        self.hwid = get_hardware_id()
+        print(f"Hardware ID: {self.hwid}")
         
         # Initialize UI
         self.init_ui()
@@ -134,6 +197,12 @@ class TactDupeApp(QWidget):
         self.keys_left_label.setAlignment(Qt.AlignCenter)
         self.keys_left_label.setStyleSheet("font-size: 14px; color: #CB6CE6;")
         self.page1_layout.addWidget(self.keys_left_label)
+
+        # Add HWID label
+        hwid_label = QLabel(f"HWID: {self.hwid[:8]}...{self.hwid[-8:]}", self)
+        hwid_label.setAlignment(Qt.AlignCenter)
+        hwid_label.setStyleSheet("font-size: 12px; color: #888888;")
+        self.page1_layout.addWidget(hwid_label)
 
         generate_button = QPushButton("Generate Key", self)
         generate_button.setStyleSheet("background-color: #CB6CE6; color: #ffffff; border: none; padding: 10px; font-size: 14px;")
@@ -202,26 +271,33 @@ class TactDupeApp(QWidget):
         if not username:
             QMessageBox.warning(self, "Input Error", "Please enter a username before proceeding.")
             return
-            
-        # Check if username matches stored username from config
-        if self.config and 'username' in self.config:
-            if username != self.config['username']:
-                QMessageBox.warning(self, "Username Error", 
-                                   f"This launcher was started with username '{self.config['username']}'. Please use that username.")
-                return
-                
-            # Check if user has keys left
-            if self.config.get('keys_left', 0) <= 0:
-                QMessageBox.warning(self, "No Keys Left", "You have no keys left. Please contact support to get more keys.")
-                return
-
-        # Generate a key based on the username
-        key = generate_key_from_username(username)
+          
+        # Generate a unique key
+        key = generate_key(username)
         generated_keys[username] = key  # Store the generated key with the username
         print(f"Generated key for {username}: {key}")
+        
+        # Try to update keys.json with the new key
+        try:
+            keys_data = {}
+            if os.path.exists("keys.json"):
+                with open("keys.json", "r") as f:
+                    keys_data = json.load(f)
+            
+            if username in keys_data:
+                keys_data[username]["key"] = key
+            else:
+                keys_data[username] = {"key": key, "hwid": "0", "keys_left": 5}
+                
+            with open("keys.json", "w") as f:
+                json.dump(keys_data, f, indent=4)
+                
+            print(f"Updated keys.json with new key for {username}")
+        except Exception as e:
+            print(f"Error updating keys.json: {e}")
 
         # Send key and username to Discord with embed
-        if send_to_discord_with_embed(username, key, "Generated Key"):
+        if send_to_discord_with_embed(username, key, "Generated Key", self.hwid):
             # Move to the next page if the webhook is successful
             self.stacked_widget.setCurrentIndex(1)  # Switch to the next page for key entry
             QMessageBox.information(self, "Key Generated", f"Your key is: {key}\n\nThis key has been sent to the admin for verification.")
@@ -236,37 +312,40 @@ class TactDupeApp(QWidget):
             QMessageBox.warning(self, "Validation Error", "Please enter the key.")
             return
 
-        # Validate the entered key against the generated key for that username
-        if validate_key_with_github(username, entered_key):
-            QMessageBox.information(self, "Success", "Key validated successfully!")
-            send_to_discord_with_embed(username, entered_key, "Key Validated")
+        # Validate the key and check HWID
+        valid, message = validate_key_with_github(username, entered_key, self.hwid)
+        
+        if valid:
+            QMessageBox.information(self, "Success", message)
+            send_to_discord_with_embed(username, entered_key, "Key Validated", self.hwid)
             self.stacked_widget.setCurrentIndex(2)  # Switch to the dupe functionality page
-        else:
-            QMessageBox.warning(self, "Validation Error", "Invalid key entered. Please check your key and try again.")
 
     def block_roblox(self):
         username = self.username_input.text()
-        key = self.key_input.text()
-        block_roblox(username, key)  # Call the block_roblox function
-        QMessageBox.information(self, "Dupe Started", "Roblox connection blocked. Keep this window open until you're done duping.")
+        key = generated_keys.get(username)
+        
+        if not username or not key:
+            QMessageBox.warning(self, "Error", "Please generate a key first.")
+            return
+        
+        # Block Roblox connection
+        block_roblox(username, key)
+        QMessageBox.information(self, "Dupe Started", "Roblox has been blocked. Dupe process started.")
 
     def unblock_roblox(self):
         username = self.username_input.text()
-        key = self.key_input.text()
-        unblock_roblox(username, key)  # Call the unblock_roblox function
-        QMessageBox.information(self, "Dupe Ended", "Roblox connection restored. Your items have been duped.")
+        key = generated_keys.get(username)
+        
+        if not username or not key:
+            QMessageBox.warning(self, "Error", "Please generate a key first.")
+            return
+        
+        # Unblock Roblox connection
+        unblock_roblox(username, key)
+        QMessageBox.information(self, "Dupe Ended", "Roblox connection restored. Dupe process ended.")
 
 if __name__ == "__main__":
-    try:
-        # Get username from command line args if provided
-        username = ""
-        if len(sys.argv) > 1:
-            username = sys.argv[1]
-        
-        app = QApplication(sys.argv)
-        window = TactDupeApp(username)
-        window.show()
-        sys.exit(app.exec())
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    app = QApplication(sys.argv)
+    window = TactDupeApp()  # Optionally pass a username here if you have one
+    window.show()
+    sys.exit(app.exec())
