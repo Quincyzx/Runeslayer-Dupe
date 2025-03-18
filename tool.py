@@ -1196,7 +1196,7 @@ class RuneSlayerTool:
 GITHUB_USER = "runeslayer"      # GitHub username 
 GITHUB_REPO = "runeslayer-tool" # GitHub repository name
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-KEYS_FILE_PATH = "keys.json"  # Path to keys file in GitHub repo
+KEYS_FILE_PATH = "keys.json"  # Path to keys file in GitHub repo and local directory
 
 class AuthenticationApp:
     """Authentication window for RuneSlayer"""
@@ -1254,7 +1254,7 @@ class AuthenticationApp:
         
         self.key_var = tk.StringVar()
         # Pre-fill with a test key for development
-        self.key_var.set("RUNE-SLAYER-1234-ABCD-5678-EFGH-9012")
+        self.key_var.set("RUNE-SLAYER-1234-ABCD-5678-EFGH-9101")
         
         key_entry = tk.Entry(
             login_container,
@@ -1320,37 +1320,73 @@ class AuthenticationApp:
     def _authenticate_thread(self, license_key):
         """Authentication process in a separate thread"""
         try:
+            # Debug output
+            print(f"Starting authentication with key: {license_key}")
+            
             # Download keys.json from GitHub
+            print("Attempting to download keys.json from GitHub...")
             success, result = self.download_file_from_github(KEYS_FILE_PATH)
             
+            # If GitHub download fails, try to use local keys.json for development
             if not success:
-                self.root.after(0, lambda: self._update_auth_status(False, f"Failed to download authentication data: {result}"))
-                return
+                print(f"GitHub download failed: {result}")
+                try:
+                    # Use local keys.json if available
+                    local_path = KEYS_FILE_PATH  # The local file in the current directory
+                    print(f"Looking for local file at: {os.path.abspath(local_path)}")
+                    
+                    if os.path.exists(local_path):
+                        print(f"Found local keys.json file")
+                        with open(local_path, 'r') as file:
+                            result = file.read()
+                            success = True
+                            print(f"Successfully read local keys.json file")
+                    else:
+                        print(f"Local keys.json file not found")
+                        self.root.after(0, lambda: self._update_auth_status(False, f"Failed to download authentication data: {result}"))
+                        return
+                except Exception as e:
+                    print(f"Error reading local file: {str(e)}")
+                    self.root.after(0, lambda: self._update_auth_status(False, f"Failed to read local keys file: {str(e)}"))
+                    return
             
             # Parse keys data
             try:
+                print("Parsing keys data...")
                 keys_data = json.loads(result)
-            except json.JSONDecodeError:
+                print(f"Keys data parsed successfully: {len(keys_data.get('keys', []))} keys found")
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {str(e)}")
                 self.root.after(0, lambda: self._update_auth_status(False, "Invalid authentication data format"))
                 return
             
             # Verify license key
+            print(f"Verifying license key: {license_key}")
             valid_key = False
             key_info = None
             
-            for key_entry in keys_data.get("keys", []):
+            # Print all available keys for debugging
+            print("Available keys in the database:")
+            for idx, key_entry in enumerate(keys_data.get("keys", [])):
+                print(f"  Key {idx+1}: {key_entry.get('key')} (Uses remaining: {key_entry.get('uses_remaining', 0)})")
+                
                 if key_entry.get("key") == license_key:
+                    print(f"Found matching key: {license_key}")
                     # Check uses remaining
                     uses_remaining = key_entry.get("uses_remaining", 0)
+                    print(f"Uses remaining: {uses_remaining}")
                     if uses_remaining > 0:
                         valid_key = True
                         key_info = key_entry
+                        print("Key is valid with uses remaining!")
                         break
                     else:
+                        print("Key has no uses remaining")
                         self.root.after(0, lambda: self._update_auth_status(False, "License key has no uses remaining"))
                         return
             
             if not valid_key:
+                print(f"No valid key found matching: {license_key}")
                 self.root.after(0, lambda: self._update_auth_status(False, "Invalid license key"))
                 return
             
