@@ -50,7 +50,7 @@ class RuneSlayerTool:
         
         # Default user info if none provided
         if user_info is None:
-            self.user_info = {"key": "UNKNOWN", "tier": "standard", "owner": "User"}
+            self.user_info = {"key": "UNKNOWN", "uses_remaining": 0}
         else:
             self.user_info = user_info
         
@@ -81,7 +81,10 @@ class RuneSlayerTool:
         self.setup_ui()
         
         # Log startup
-        self.log_operation(f"RuneSlayer started by {self.user_info.get('owner', 'User')} (License: {self.user_info.get('tier', 'standard')})")
+        key = self.user_info.get('key', 'UNKNOWN')
+        truncated_key = key[:8] + "..." if len(key) > 8 else key
+        uses = self.user_info.get('uses_remaining', 0)
+        self.log_operation(f"RuneSlayer started with license key {truncated_key} ({uses} uses remaining)")
     
     def set_window_icon(self):
         """Set the window icon if available"""
@@ -117,23 +120,28 @@ class RuneSlayerTool:
         user_frame = tk.Frame(header_frame, bg=COLORS["background"])
         user_frame.pack(side=tk.RIGHT)
         
-        user_label = tk.Label(
+        # Key info (truncated for security)
+        key = self.user_info.get('key', 'UNKNOWN')
+        truncated_key = key[:10] + "..." if len(key) > 10 else key
+        
+        key_label = tk.Label(
             user_frame,
-            text=f"User: {self.user_info.get('owner', 'User')}",
+            text=f"Key: {truncated_key}",
             font=("Arial", 10),
             bg=COLORS["background"],
             fg=COLORS["text"]
         )
-        user_label.pack(anchor=tk.E)
+        key_label.pack(anchor=tk.E)
         
-        tier_label = tk.Label(
+        # Uses remaining
+        uses_label = tk.Label(
             user_frame,
-            text=f"License: {self.user_info.get('tier', 'standard').title()}",
+            text=f"Uses remaining: {self.user_info.get('uses_remaining', 0)}",
             font=("Arial", 10),
             bg=COLORS["background"],
             fg=COLORS["primary"]
         )
-        tier_label.pack(anchor=tk.E)
+        uses_label.pack(anchor=tk.E)
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.main_frame)
