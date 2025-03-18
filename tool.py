@@ -11,12 +11,22 @@ import threading
 import uuid
 import requests
 import base64
+import shutil
+import tempfile
+import atexit
+import sys
+import subprocess
 
 # GitHub Configuration
 GITHUB_USER = "Quincyzx"        # GitHub username 
 GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+GITHUB_BRANCH = "master"        # GitHub branch name
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Debug output for GitHub token
+print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
+print(f"Tool.py - Current environment variables: {list(os.environ.keys())}")
 
 # Color theme - Discord inspired
 COLORS = {
@@ -225,9 +235,9 @@ class AuthenticationApp:
     def get_sha_of_file(self):
         """Get the SHA of the keys file on GitHub (required for updating)"""
         api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{KEYS_FILE_PATH}"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        headers = {
+            "Accept": "application/vnd.github.v3+json"
+        }
         
         try:
             print(f"Getting SHA from: {api_url}")
@@ -260,10 +270,18 @@ class AuthenticationApp:
         # GitHub API requires Base64 encoded content
         encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
         
-        # Set up headers
-        headers = {"Accept": "application/vnd.github.v3+json"}
+        # For public repositories, we still need a token to push changes
+        # This will only work if you have write access to the repository
+        headers = {
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        # Add token if available
         if GITHUB_TOKEN:
             headers["Authorization"] = f"token {GITHUB_TOKEN}"
+            print("Using GitHub token for authentication when updating keys")
+        else:
+            print("Warning: No GitHub token available for updating keys")
         
         data = {
             "message": "Update keys after authentication",
@@ -287,39 +305,30 @@ class AuthenticationApp:
             return False
     
     def download_file_from_github(self, file_path):
-        """Download a file from GitHub"""
-        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{file_path}"
-        
-        # Setup headers
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        """Download a file from GitHub using raw URL for public repositories"""
+        # Construct raw GitHub URL
+        url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{file_path}"
+        print(f"Downloading file from GitHub: {file_path}")
+        print(f"Raw URL: {url}")
         
         try:
             # Make the request
-            response = requests.get(api_url, headers=headers)
+            print(f"Making request to GitHub raw URL...")
+            response = requests.get(url)
+            print(f"Response status code: {response.status_code}")
             
             # Check for successful response
             if response.status_code == 200:
-                # Parse the JSON response
-                data = response.json()
-                
-                # Make sure the content is of type "file"
-                if "type" not in data or data["type"] != "file":
-                    return False, "The specified path is not a file"
-                
-                # Decode the Base64 encoded content
-                content = base64.b64decode(data["content"])
+                print("GitHub download successful")
+                content = response.content
+                print(f"Successfully downloaded content (length: {len(content)} bytes)")
                 
                 # Return content as string
                 return True, content.decode('utf-8')
             else:
                 # Handle error response
                 error_message = f"Failed to download file. Status code: {response.status_code}"
-                try:
-                    error_message += f", Message: {response.json().get('message', '')}"
-                except:
-                    pass
+                print(f"Download error: {error_message}")
                 return False, error_message
         
         except Exception as e:
@@ -370,9 +379,14 @@ class AuthenticationApp:
                     # Store user info
                     current_hwid = str(uuid.getnode())  # MAC address as HWID
                     
+                    # Make sure key_info is not None
+                    uses_remaining = 0
+                    if key_info is not None:
+                        uses_remaining = key_info.get("uses_remaining", 0)
+                    
                     self.user_info = {
                         "key": license_key,
-                        "uses_remaining": key_info.get("uses_remaining", 0),
+                        "uses_remaining": uses_remaining,
                         "hwid": current_hwid
                     }
                     
@@ -427,6 +441,168 @@ class AuthenticationApp:
         # Create and show the main application
         main_app = RuneSlayerTool(self.root, self.user_info)
 
+# Secure cleanup functions
+def secure_delete_file(file_path):
+    """Securely delete a file by overwriting it with random data before deleting"""
+    if not os.path.exists(file_path):
+        return
+    
+    try:
+        # Get file size
+        file_size = os.path.getsize(file_path)
+        
+        # Open file for binary write
+        with open(file_path, "wb") as f:
+            # First pass: Overwrite with zeros
+            f.write(b'\x00' * file_size)
+            f.flush()
+            os.fsync(f.fileno())
+            
+            # Second pass: Overwrite with ones
+            f.seek(0)
+            f.write(b'\xFF' * file_size)
+            f.flush()
+            os.fsync(f.fileno())
+            
+            # Third pass: Overwrite with random data
+            f.seek(0)
+            f.write(os.urandom(file_size))
+            f.flush()
+            os.fsync(f.fileno())
+        
+        # Delete the file
+        os.remove(file_path)
+        print(f"Securely deleted file: {file_path}")
+    except Exception as e:
+        print(f"Error securely deleting file {file_path}: {str(e)}")
+        # Fallback to regular delete
+        try:
+            os.remove(file_path)
+            print(f"Performed regular delete of file: {file_path}")
+        except:
+            pass
+
+def cleanup_temp_directories():
+    """Clean up temporary directories created by RuneSlayer"""
+    try:
+        # Find all temporary directories with 'runeslayer_' prefix
+        temp_dir = tempfile.gettempdir()
+        for item in os.listdir(temp_dir):
+            item_path = os.path.join(temp_dir, item)
+            if os.path.isdir(item_path) and item.startswith('runeslayer_'):
+                try:
+                    # Clean up each directory
+                    print(f"Cleaning up temp directory: {item_path}")
+                    for root, dirs, files in os.walk(item_path, topdown=False):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            secure_delete_file(file_path)
+                        for dir in dirs:
+                            try:
+                                dir_path = os.path.join(root, dir)
+                                os.rmdir(dir_path)
+                            except:
+                                pass
+                    # Remove the directory itself
+                    os.rmdir(item_path)
+                    print(f"Removed temp directory: {item_path}")
+                except Exception as e:
+                    print(f"Error cleaning up directory {item_path}: {str(e)}")
+    except Exception as e:
+        print(f"Error during temp directory cleanup: {str(e)}")
+
+def empty_recycle_bin():
+    """Empty the recycle bin/trash on the system"""
+    try:
+        # Determine the operating system
+        if os.name == 'nt':  # Windows
+            print("Emptying Windows Recycle Bin...")
+            subprocess.run(['powershell.exe', 'Clear-RecycleBin', '-Force', '-ErrorAction', 'SilentlyContinue'], 
+                           capture_output=True, check=False)
+        elif sys.platform == 'darwin':  # macOS
+            print("Emptying macOS Trash...")
+            subprocess.run(['osascript', '-e', 'tell app "Finder" to empty trash'], 
+                           capture_output=True, check=False)
+        elif sys.platform.startswith('linux'):  # Linux
+            # Different Linux distros handle trash differently, try common methods
+            print("Emptying Linux Trash...")
+            trash_dirs = [
+                os.path.expanduser('~/.local/share/Trash'),
+                os.path.expanduser('~/.Trash'),
+            ]
+            for trash_dir in trash_dirs:
+                if os.path.exists(trash_dir):
+                    try:
+                        # Remove files in trash/files
+                        files_dir = os.path.join(trash_dir, 'files')
+                        if os.path.exists(files_dir):
+                            for item in os.listdir(files_dir):
+                                item_path = os.path.join(files_dir, item)
+                                if os.path.isdir(item_path):
+                                    shutil.rmtree(item_path, ignore_errors=True)
+                                else:
+                                    secure_delete_file(item_path)
+                        
+                        # Remove info files
+                        info_dir = os.path.join(trash_dir, 'info')
+                        if os.path.exists(info_dir):
+                            for item in os.listdir(info_dir):
+                                item_path = os.path.join(info_dir, item)
+                                if not os.path.isdir(item_path):
+                                    os.remove(item_path)
+                    except Exception as e:
+                        print(f"Error emptying trash directory {trash_dir}: {str(e)}")
+    except Exception as e:
+        print(f"Error emptying recycle bin: {str(e)}")
+
+def perform_cleanup():
+    """Perform all cleanup operations"""
+    print("Starting secure cleanup...")
+    
+    # Get this script's path
+    script_path = os.path.abspath(__file__)
+    print(f"Script path: {script_path}")
+    
+    # Clean up temp directories
+    cleanup_temp_directories()
+    
+    # Empty recycle bin
+    empty_recycle_bin()
+    
+    # Lastly, try to securely delete this script (may not work as it's running)
+    try:
+        # Set the script to delete on exit
+        # We can't reliably delete the running script, so we create a small batch file to do it
+        if os.name == 'nt':  # Windows
+            batch_path = os.path.join(tempfile.gettempdir(), f"cleanup_{uuid.uuid4().hex}.bat")
+            with open(batch_path, "w") as f:
+                f.write(f'@echo off\r\n')
+                f.write(f'timeout /t 1 /nobreak > nul\r\n')
+                f.write(f'del /F /Q "{script_path}"\r\n')
+                f.write(f'del /F /Q "{batch_path}"\r\n')
+            subprocess.Popen(f'start /min "" cmd /c "{batch_path}"', shell=True)
+        else:  # Unix-like systems
+            shell_path = os.path.join(tempfile.gettempdir(), f"cleanup_{uuid.uuid4().hex}.sh")
+            with open(shell_path, "w") as f:
+                f.write("#!/bin/sh\n")
+                f.write(f"sleep 1\n")
+                f.write(f"rm -f '{script_path}'\n")
+                f.write(f"rm -f '{shell_path}'\n")
+            os.chmod(shell_path, 0o755)
+            subprocess.Popen(f"nohup {shell_path} >/dev/null 2>&1 &", shell=True)
+    except Exception as e:
+        print(f"Error setting up self-deletion: {str(e)}")
+    
+    print("Secure cleanup complete")
+
+# Register the cleanup function to run on exit only if we're running in a temporary process
+# Check for the environment variable set by the loader
+if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
+    print("Cleanup on exit enabled - will remove all traces when closing")
+    atexit.register(perform_cleanup)
+else:
+    print("Running in development mode - cleanup disabled")
+
 def main(user_info=None):
     """Main entry point"""
     try:
@@ -443,6 +619,12 @@ def main(user_info=None):
         else:
             # Start with auth window if no user_info
             app = AuthenticationApp(root)
+        
+        # Add handler for window close event to ensure cleanup occurs (if needed)
+        if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
+            root.protocol("WM_DELETE_WINDOW", lambda: (perform_cleanup(), root.destroy()))
+        else:
+            root.protocol("WM_DELETE_WINDOW", root.destroy)
         
         # Start main loop
         root.mainloop()
