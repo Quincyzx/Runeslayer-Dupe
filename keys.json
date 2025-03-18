@@ -6,9 +6,14 @@
             "hwid": "206262336982322880"
         },
         {
-            "key": "TEST-KEY-ABCD-1234-EFGH-5678-WXYZ",
-            "uses_remaining": 9,
-            "hwid": "206262336982880"
-        }
+            "key": "Koto",
+            "uses_remaining": 3,
+            "hwid": ""
+        },
+        {
+            "key": "Tact",
+            "uses_remaining": 14999999999999999999999999999999999999999999999,
+            "hwid": ""
+        }        
     ]
 }
