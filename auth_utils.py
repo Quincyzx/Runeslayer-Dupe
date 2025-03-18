@@ -10,7 +10,50 @@ import requests
 import socket
 import uuid
 import getpass
+import base64
 from typing import Dict, Tuple, Optional
+
+# GitHub Configuration
+GITHUB_USER = "Quincyzx"
+GITHUB_REPO = "Runeslayer-Dupe"
+GITHUB_BRANCH = "main"
+GITHUB_TOKEN = "your_github_token_here"  # Replace with your actual token
+
+def update_github_file(file_path: str, content: str, commit_message: str) -> Tuple[bool, str]:
+    """Update a file in GitHub repository"""
+    try:
+        # GitHub API endpoint
+        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{file_path}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        # Get current file info
+        response = requests.get(api_url, headers=headers)
+        if response.status_code != 200:
+            return False, f"Failed to get file info: {response.status_code}"
+
+        file_info = response.json()
+        current_sha = file_info.get('sha')
+
+        # Prepare update data
+        update_data = {
+            "message": commit_message,
+            "content": base64.b64encode(content.encode()).decode(),
+            "sha": current_sha,
+            "branch": GITHUB_BRANCH
+        }
+
+        # Update file
+        response = requests.put(api_url, headers=headers, json=update_data)
+        if response.status_code not in [200, 201]:
+            return False, f"Failed to update file: {response.status_code}"
+
+        return True, "File updated successfully"
+
+    except Exception as e:
+        return False, f"GitHub update error: {str(e)}"
 
 def get_system_id() -> str:
     """Generate a unique system identifier"""
@@ -103,9 +146,18 @@ def verify_license(key: str, keys_file: str) -> Tuple[bool, Optional[Dict], str]
             # Register HWID for new user
             key_entry['hwid'] = current_hwid
 
-            # Save updated keys file
+            # Save updated keys file locally
             with open(keys_file, 'w') as f:
                 json.dump(keys_data, f, indent=4)
+
+            # Update GitHub
+            success, message = update_github_file(
+                'keys.json',
+                json.dumps(keys_data, indent=4),
+                f"Update HWID for key: {key}"
+            )
+            if not success:
+                print(f"Warning: Failed to update GitHub: {message}")
 
         return True, key_entry, "Success"
 
@@ -130,9 +182,18 @@ def update_usage(key: str, keys_file: str) -> Tuple[bool, str]:
         if not key_updated:
             return False, "Invalid license key"
 
-        # Save updated keys file
+        # Save updated keys file locally
         with open(keys_file, 'w') as f:
             json.dump(keys_data, f, indent=4)
+
+        # Update GitHub
+        success, message = update_github_file(
+            'keys.json',
+            json.dumps(keys_data, indent=4),
+            f"Update usage count for key: {key}"
+        )
+        if not success:
+            print(f"Warning: Failed to update GitHub: {message}")
 
         return True, "Usage updated successfully"
 
