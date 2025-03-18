@@ -355,8 +355,10 @@ COLORS = {
     "primary": "#5865F2",
     "primary_hover": "#4752C4",
     "success": "#43B581",
+    "success_hover": "#3CA374",  # Added success hover color
     "warning": "#FAA61A",
     "danger": "#F04747",
+    "danger_hover": "#D04040",  # Added danger hover color
     "border": "#42454A",
     "input_bg": "#40444B"
 }
