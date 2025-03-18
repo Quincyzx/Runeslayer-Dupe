@@ -18,20 +18,23 @@ from auth_utils import verify_license, update_usage
 APP_TITLE = "Tact Tool"
 VERSION = "1.0"
 
-# Modern dark theme colors
+# Modern dark theme colors - Roblox executor inspired
 COLORS = {
-    "background": "#1a1a1a",  # Dark background
-    "secondary_bg": "#242424",  # Slightly lighter background
-    "accent": "#00a8ff",  # Bright blue accent
-    "accent_hover": "#0097e6",
+    "background": "#121212",  # Darker background
+    "secondary_bg": "#1e1e1e",  # Slightly lighter background
+    "accent": "#00b4ff",  # Bright cyan accent
+    "accent_hover": "#0095d9",
     "text": "#ffffff",
-    "text_secondary": "#b3b3b3",
+    "text_secondary": "#858585",
     "success": "#2ecc71",
     "warning": "#f1c40f",
     "danger": "#e74c3c",
     "danger_hover": "#c0392b",
-    "border": "#333333",
-    "input_bg": "#333333"
+    "border": "#2a2a2a",
+    "input_bg": "#1a1a1a",
+    "tab_active": "#00b4ff",
+    "tab_inactive": "#1a1a1a",
+    "tab_hover": "#252525"
 }
 
 class TactTool:
@@ -70,25 +73,36 @@ class TactTool:
         """Set up custom ttk styles"""
         style = ttk.Style()
 
-        # Configure tab style
+        # Configure notebook (tab container)
         style.configure(
             "Custom.TNotebook",
             background=COLORS["background"],
-            borderwidth=0
-        )
-        style.configure(
-            "Custom.TNotebook.Tab",
-            padding=[20, 10],
-            background=COLORS["secondary_bg"],
-            foreground=COLORS["text"],
-        )
-        style.map(
-            "Custom.TNotebook.Tab",
-            background=[("selected", COLORS["accent"])],
-            foreground=[("selected", COLORS["text"])]
+            borderwidth=0,
+            padding=0
         )
 
-        # Configure frame style
+        # Configure notebook tabs
+        style.configure(
+            "Custom.TNotebook.Tab",
+            padding=[20, 12],
+            background=COLORS["tab_inactive"],
+            foreground=COLORS["text"],
+            font=("Segoe UI", 11)
+        )
+
+        style.map(
+            "Custom.TNotebook.Tab",
+            background=[
+                ("selected", COLORS["tab_active"]),
+                ("active", COLORS["tab_hover"])
+            ],
+            foreground=[
+                ("selected", COLORS["text"]),
+                ("active", COLORS["text"])
+            ]
+        )
+
+        # Configure frames
         style.configure(
             "Custom.TFrame",
             background=COLORS["background"]
@@ -110,10 +124,11 @@ class TactTool:
         )
         title_label.pack(pady=(0, 30))
 
-        # License key entry
+        # License key entry frame
         key_frame = tk.Frame(self.auth_frame, bg=COLORS["background"])
         key_frame.pack(pady=(0, 20), fill=tk.X)
 
+        # License key label
         key_label = tk.Label(
             key_frame,
             text="License Key",
@@ -123,6 +138,7 @@ class TactTool:
         )
         key_label.pack(anchor=tk.W, padx=(0, 10), pady=(0, 5))
 
+        # Key entry with modern styling
         self.key_entry = tk.Entry(
             key_frame,
             font=("Segoe UI", 12),
@@ -132,9 +148,13 @@ class TactTool:
             relief=tk.FLAT,
             width=30
         )
-        self.key_entry.pack(fill=tk.X, ipady=8)
+        self.key_entry.pack(fill=tk.X, ipady=10)
 
-        # Login button
+        # Add a border effect
+        border_frame = tk.Frame(key_frame, bg=COLORS["accent"], height=2)
+        border_frame.pack(fill=tk.X, pady=(0, 5))
+
+        # Login button with hover effect
         self.login_button = tk.Button(
             self.auth_frame,
             text="LOGIN",
@@ -146,7 +166,8 @@ class TactTool:
             relief=tk.FLAT,
             padx=40,
             pady=12,
-            command=self.login
+            command=self.login,
+            cursor="hand2"  # Hand cursor on hover
         )
         self.login_button.pack(pady=(20, 30))
 
