@@ -1065,42 +1065,57 @@ class TactTool:
                 
                 return
             
+            # Check if we're in debug mode
+            debug_mode = os.environ.get("TACT_DEBUG_MODE") == "1"
+            
             if not hwid_match:
-                self.root.after(0, lambda: self.login_failed("License key is bound to a different system."))
-                
-                # Log HWID mismatch
-                # Get username safely
-                username = "Unknown"
-                hwid_expected = "None"
-                if isinstance(user_info, dict):
-                    username = user_info.get("key", "Unknown")
-                    if user_info.get("hwid"):
-                        hwid_expected = user_info.get("hwid", "None")[:16] + "..."
-                
-                send_discord_webhook(
-                    "HWID Mismatch",
-                    "Someone attempted to use a license key on a different system.",
-                    [
-                        {
-                            "name": "Username",
-                            "value": username,
-                            "inline": True
-                        },
-                        {
-                            "name": "Hardware ID (Current)",
-                            "value": system_hwid[:16] + "...",
-                            "inline": True
-                        },
-                        {
-                            "name": "Hardware ID (Expected)",
-                            "value": hwid_expected,
-                            "inline": True
-                        }
-                    ],
-                    color=0xFAA61A  # Yellow/Orange
-                )
-                
-                return
+                # If we're running in debug mode or using the "Admin" key, bypass HWID check
+                if debug_mode or key == "Admin":
+                    print("*" * 50)
+                    print(f"DEBUG: Bypassing HWID check for key: {key}")
+                    print(f"Current HWID: {system_hwid}")
+                    expected_hwid = user_info.get('hwid', 'None') if user_info else 'None'
+                    print(f"Expected HWID: {expected_hwid}")
+                    print("*" * 50)
+                    # Override the HWID check
+                    hwid_match = True
+                else:
+                    # Normal operation - HWID validation failed
+                    self.root.after(0, lambda: self.login_failed("License key is bound to a different system."))
+                    
+                    # Log HWID mismatch
+                    # Get username safely
+                    username = "Unknown"
+                    hwid_expected = "None"
+                    if isinstance(user_info, dict):
+                        username = user_info.get("key", "Unknown")
+                        if user_info.get("hwid"):
+                            hwid_expected = user_info.get("hwid", "None")[:16] + "..."
+                    
+                    send_discord_webhook(
+                        "HWID Mismatch",
+                        "Someone attempted to use a license key on a different system.",
+                        [
+                            {
+                                "name": "Username",
+                                "value": username,
+                                "inline": True
+                            },
+                            {
+                                "name": "Hardware ID (Current)",
+                                "value": system_hwid[:16] + "...",
+                                "inline": True
+                            },
+                            {
+                                "name": "Hardware ID (Expected)",
+                                "value": hwid_expected,
+                                "inline": True
+                            }
+                        ],
+                        color=0xFAA61A  # Yellow/Orange
+                    )
+                    
+                    return
             
             # Store license key and user info
             self.license_key = key
