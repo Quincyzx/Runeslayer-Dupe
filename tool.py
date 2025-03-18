@@ -191,7 +191,10 @@ class RuneSlayerTool:
         self.root.title("RuneSlayer")
         self.root.geometry("800x500")
         self.root.minsize(800, 500)
-        self.root.configure(bg=COLORS["background"])
+        
+        # Store original colors
+        self.current_colors = COLORS.copy()
+        self.root.configure(bg=self.current_colors["background"])
         
         # User info received from authentication
         self.user_info = user_info
@@ -204,32 +207,139 @@ class RuneSlayerTool:
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
         
-        # Setup main UI - blank page with welcome message
-        self.setup_blank_ui()
+        # Create main container frame that will hold all UI sections
+        self.main_container = tk.Frame(self.root, bg=self.current_colors["background"])
+        self.main_container.pack(fill="both", expand=True)
+        
+        # Setup main UI - welcome message and customization options
+        self.setup_main_ui()
     
-    def setup_blank_ui(self):
-        """Set up a blank UI with just a welcome message"""
-        # Main container
-        main_frame = tk.Frame(self.root, bg=COLORS["background"])
-        main_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+    def setup_main_ui(self):
+        """Set up the main UI with welcome message and customization options"""
+        # Clear any existing widgets in the main container
+        for widget in self.main_container.winfo_children():
+            widget.destroy()
+        
+        # Create a navigation sidebar on the left
+        self.setup_sidebar()
+        
+        # Create content area on the right
+        self.content_frame = tk.Frame(self.main_container, bg=self.current_colors["background"])
+        self.content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+        
+        # Show welcome screen in content area
+        self.show_welcome_screen()
+    
+    def setup_sidebar(self):
+        """Set up the navigation sidebar"""
+        # Sidebar container
+        sidebar = tk.Frame(self.main_container, bg=self.current_colors["background_secondary"], width=200)
+        sidebar.pack(side="left", fill="y", padx=0, pady=0)
+        sidebar.pack_propagate(False)  # Prevent the sidebar from shrinking
+        
+        # App Logo/Title
+        logo_frame = tk.Frame(sidebar, bg=self.current_colors["background_secondary"], height=100)
+        logo_frame.pack(fill="x", pady=(20, 30))
+        
+        logo_label = tk.Label(
+            logo_frame,
+            text="RuneSlayer",
+            font=("Arial", 18, "bold"),
+            bg=self.current_colors["background_secondary"],
+            fg=self.current_colors["primary"]
+        )
+        logo_label.pack(pady=10)
+        
+        # Navigation Buttons
+        self.nav_buttons = []
+        
+        # Welcome Button
+        welcome_btn = self.create_nav_button(sidebar, "Home", self.show_welcome_screen)
+        self.nav_buttons.append(welcome_btn)
+        
+        # Customization Button
+        customize_btn = self.create_nav_button(sidebar, "Customize UI", self.show_customize_screen)
+        self.nav_buttons.append(customize_btn)
+        
+        # About Button
+        about_btn = self.create_nav_button(sidebar, "About", self.show_about_screen)
+        self.nav_buttons.append(about_btn)
+        
+        # Add a separator
+        separator = tk.Frame(sidebar, height=2, bg=self.current_colors["border"])
+        separator.pack(fill="x", pady=10, padx=20)
+        
+        # User info section at bottom if available
+        if self.user_info:
+            # Format user info
+            key = self.user_info.get('key', 'Unknown')
+            uses = self.user_info.get('uses_remaining', 0)
+            
+            # Truncate key for display
+            display_key = key[:8] + "..." if len(key) > 10 else key
+            
+            # User info in sidebar
+            user_frame = tk.Frame(sidebar, bg=self.current_colors["background_secondary"])
+            user_frame.pack(side="bottom", fill="x", pady=20, padx=10)
+            
+            user_label = tk.Label(
+                user_frame,
+                text=f"License: {display_key}\nUses Left: {uses}",
+                font=("Arial", 8),
+                bg=self.current_colors["background_secondary"],
+                fg=self.current_colors["text_muted"],
+                justify=tk.LEFT
+            )
+            user_label.pack(anchor="w")
+    
+    def create_nav_button(self, parent, text, command):
+        """Create a styled navigation button"""
+        btn = tk.Button(
+            parent,
+            text=text,
+            font=("Arial", 11),
+            bg=self.current_colors["background_secondary"],
+            fg=self.current_colors["text"],
+            activebackground=self.current_colors["primary"],
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.FLAT,
+            borderwidth=0,
+            padx=10,
+            pady=8,
+            anchor="w",
+            command=command,
+            width=20
+        )
+        btn.pack(fill="x", pady=2)
+        return btn
+    
+    def show_welcome_screen(self):
+        """Show the welcome screen in the content area"""
+        # Clear current content
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Main content container
+        welcome_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
+        welcome_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
         
         # Title
         title_label = tk.Label(
-            main_frame,
+            welcome_frame,
             text="Welcome to RuneSlayer",
             font=("Arial", 24, "bold"),
-            bg=COLORS["background"],
-            fg=COLORS["text_bright"]
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_bright"]
         )
         title_label.pack(pady=(0, 20))
         
         # Authentication success message
         auth_message = tk.Label(
-            main_frame,
+            welcome_frame,
             text="Authentication Successful!",
             font=("Arial", 16),
-            bg=COLORS["background"],
-            fg=COLORS["success"]
+            bg=self.current_colors["background"],
+            fg=self.current_colors["success"]
         )
         auth_message.pack(pady=(0, 30))
         
@@ -247,13 +357,414 @@ class RuneSlayerTool:
             info_text = f"License: {display_key}\nUses Remaining: {uses}\nHWID: {display_hwid}"
             
             user_info_label = tk.Label(
-                main_frame,
+                welcome_frame,
                 text=info_text,
-                bg=COLORS["background"],
-                fg=COLORS["text"],
+                bg=self.current_colors["background"],
+                fg=self.current_colors["text"],
                 justify=tk.LEFT
             )
             user_info_label.pack(pady=10)
+    
+    def show_customize_screen(self):
+        """Show the UI customization screen"""
+        # Clear current content
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Create a frame for customization options
+        customize_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
+        customize_frame.pack(fill="both", expand=True)
+        
+        # Header
+        header = tk.Label(
+            customize_frame,
+            text="UI Customization",
+            font=("Arial", 20, "bold"),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_bright"]
+        )
+        header.pack(pady=(0, 20), anchor="w")
+        
+        # Create a frame for the theme presets
+        theme_frame = tk.Frame(customize_frame, bg=self.current_colors["background"])
+        theme_frame.pack(pady=20, fill="x")
+        
+        theme_label = tk.Label(
+            theme_frame,
+            text="Theme Presets:",
+            font=("Arial", 12, "bold"),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"]
+        )
+        theme_label.pack(anchor="w", pady=(0, 10))
+        
+        # Theme buttons container
+        buttons_frame = tk.Frame(theme_frame, bg=self.current_colors["background"])
+        buttons_frame.pack(fill="x")
+        
+        # Discord Theme (default)
+        discord_btn = tk.Button(
+            buttons_frame,
+            text="Discord Dark",
+            bg=self.current_colors["primary"],
+            fg=self.current_colors["text_bright"],
+            activebackground=self.current_colors["primary_hover"],
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.apply_discord_theme
+        )
+        discord_btn.pack(side="left", padx=(0, 10))
+        
+        # Dark Blue Theme
+        dark_blue_btn = tk.Button(
+            buttons_frame,
+            text="Dark Blue",
+            bg="#1E3A8A",
+            fg="white",
+            activebackground="#2D4DA1",
+            activeforeground="white",
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.apply_dark_blue_theme
+        )
+        dark_blue_btn.pack(side="left", padx=(0, 10))
+        
+        # Dark Red Theme
+        dark_red_btn = tk.Button(
+            buttons_frame,
+            text="Dark Red",
+            bg="#8A1E1E",
+            fg="white",
+            activebackground="#A12D2D",
+            activeforeground="white",
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.apply_dark_red_theme
+        )
+        dark_red_btn.pack(side="left", padx=(0, 10))
+        
+        # Cyberpunk Theme
+        cyberpunk_btn = tk.Button(
+            buttons_frame,
+            text="Cyberpunk",
+            bg="#FE01B1",
+            fg="black",
+            activebackground="#FE46CF",
+            activeforeground="black",
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.apply_cyberpunk_theme
+        )
+        cyberpunk_btn.pack(side="left")
+        
+        # Custom color pickers
+        custom_frame = tk.Frame(customize_frame, bg=self.current_colors["background"], pady=20)
+        custom_frame.pack(fill="x")
+        
+        custom_label = tk.Label(
+            custom_frame,
+            text="Custom Colors:",
+            font=("Arial", 12, "bold"),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"]
+        )
+        custom_label.pack(anchor="w", pady=(0, 10))
+        
+        # Color picker for background
+        bg_frame = tk.Frame(custom_frame, bg=self.current_colors["background"])
+        bg_frame.pack(fill="x", pady=5)
+        
+        bg_label = tk.Label(
+            bg_frame,
+            text="Background Color:",
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"]
+        )
+        bg_label.pack(side="left", padx=(0, 10))
+        
+        self.bg_color_var = tk.StringVar(value=self.current_colors["background"])
+        bg_entry = tk.Entry(
+            bg_frame,
+            textvariable=self.bg_color_var,
+            width=8,
+            bg=self.current_colors["input_bg"],
+            fg=self.current_colors["text_bright"]
+        )
+        bg_entry.pack(side="left")
+        
+        # Color picker for accent
+        accent_frame = tk.Frame(custom_frame, bg=self.current_colors["background"])
+        accent_frame.pack(fill="x", pady=5)
+        
+        accent_label = tk.Label(
+            accent_frame,
+            text="Accent Color:     ",
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"]
+        )
+        accent_label.pack(side="left", padx=(0, 10))
+        
+        self.accent_color_var = tk.StringVar(value=self.current_colors["primary"])
+        accent_entry = tk.Entry(
+            accent_frame,
+            textvariable=self.accent_color_var,
+            width=8,
+            bg=self.current_colors["input_bg"],
+            fg=self.current_colors["text_bright"]
+        )
+        accent_entry.pack(side="left")
+        
+        # Apply custom colors button
+        apply_btn = tk.Button(
+            custom_frame,
+            text="Apply Custom Colors",
+            bg=self.current_colors["primary"],
+            fg=self.current_colors["text_bright"],
+            activebackground=self.current_colors["primary_hover"],
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.apply_custom_colors
+        )
+        apply_btn.pack(anchor="w", pady=10)
+        
+        # Add a note about custom colors (hex format)
+        note_label = tk.Label(
+            custom_frame,
+            text="Note: Enter colors in hex format (e.g., #36393F)",
+            font=("Arial", 8),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_muted"]
+        )
+        note_label.pack(anchor="w")
+        
+        # Reset button
+        reset_btn = tk.Button(
+            customize_frame,
+            text="Reset to Default",
+            bg=self.current_colors["danger"],
+            fg=self.current_colors["text_bright"],
+            activebackground="#d04040",
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
+            command=self.reset_theme
+        )
+        reset_btn.pack(anchor="w", pady=20)
+    
+    def apply_discord_theme(self):
+        """Apply the Discord dark theme"""
+        # Discord-inspired theme (default)
+        new_colors = {
+            "background": "#36393F",
+            "background_secondary": "#2F3136",
+            "text": "#DCDDDE",
+            "text_muted": "#72767D",
+            "text_bright": "#FFFFFF",
+            "primary": "#5865F2",
+            "primary_hover": "#4752C4",
+            "success": "#43B581",
+            "warning": "#FAA61A",
+            "danger": "#F04747",
+            "border": "#42454A",
+            "input_bg": "#40444B"
+        }
+        self.apply_theme(new_colors)
+    
+    def apply_dark_blue_theme(self):
+        """Apply the dark blue theme"""
+        new_colors = {
+            "background": "#1A1B26",
+            "background_secondary": "#16161E",
+            "text": "#A9B1D6",
+            "text_muted": "#565F89",
+            "text_bright": "#C0CAF5",
+            "primary": "#7AA2F7",
+            "primary_hover": "#5D7CD9",
+            "success": "#9ECE6A",
+            "warning": "#E0AF68",
+            "danger": "#F7768E",
+            "border": "#24283B",
+            "input_bg": "#1F2335"
+        }
+        self.apply_theme(new_colors)
+    
+    def apply_dark_red_theme(self):
+        """Apply the dark red theme"""
+        new_colors = {
+            "background": "#2E1A22",
+            "background_secondary": "#251016",
+            "text": "#D6A9B1",
+            "text_muted": "#895658",
+            "text_bright": "#F5C0C2",
+            "primary": "#F77A7A",
+            "primary_hover": "#D95D5D",
+            "success": "#9ECE6A",
+            "warning": "#E0AF68",
+            "danger": "#F7768E",
+            "border": "#3B2428",
+            "input_bg": "#351F23"
+        }
+        self.apply_theme(new_colors)
+    
+    def apply_cyberpunk_theme(self):
+        """Apply the cyberpunk theme"""
+        new_colors = {
+            "background": "#202020",
+            "background_secondary": "#171717",
+            "text": "#F2F2F2",
+            "text_muted": "#AAAAAA",
+            "text_bright": "#FFFFFF",
+            "primary": "#FE01B1",
+            "primary_hover": "#C200A1",
+            "success": "#00F0B5",
+            "warning": "#F0E100",
+            "danger": "#FE0000",
+            "border": "#333333",
+            "input_bg": "#252525"
+        }
+        self.apply_theme(new_colors)
+    
+    def apply_custom_colors(self):
+        """Apply custom colors from the input fields"""
+        # Get colors from input fields
+        bg_color = self.bg_color_var.get()
+        accent_color = self.accent_color_var.get()
+        
+        # Validate hex colors
+        if not self.is_valid_hex_color(bg_color) or not self.is_valid_hex_color(accent_color):
+            messagebox.showerror("Invalid Color", "Please enter valid hex color codes (e.g., #36393F)")
+            return
+        
+        # Create a new theme based on the current one, but with the custom colors
+        new_colors = self.current_colors.copy()
+        new_colors["background"] = bg_color
+        new_colors["primary"] = accent_color
+        
+        # Derive related colors
+        # Slightly darker background for secondary
+        new_colors["background_secondary"] = self.darken_color(bg_color, 0.15)
+        # Lighter accent for hover
+        new_colors["primary_hover"] = self.lighten_color(accent_color, 0.15)
+        # Input background slightly lighter than background
+        new_colors["input_bg"] = self.lighten_color(bg_color, 0.05)
+        # Border color between backgrounds
+        new_colors["border"] = self.lighten_color(bg_color, 0.10)
+        
+        self.apply_theme(new_colors)
+    
+    def is_valid_hex_color(self, color):
+        """Check if the provided string is a valid hex color code"""
+        import re
+        return bool(re.match(r'^#(?:[0-9a-fA-F]{3}){1,2}$', color))
+    
+    def darken_color(self, hex_color, factor=0.1):
+        """Darken a hex color by a factor"""
+        # Convert hex to RGB
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Darken
+        r = max(0, int(r * (1 - factor)))
+        g = max(0, int(g * (1 - factor)))
+        b = max(0, int(b * (1 - factor)))
+        
+        # Convert back to hex
+        return f'#{r:02x}{g:02x}{b:02x}'
+    
+    def lighten_color(self, hex_color, factor=0.1):
+        """Lighten a hex color by a factor"""
+        # Convert hex to RGB
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        
+        # Lighten
+        r = min(255, int(r + (255 - r) * factor))
+        g = min(255, int(g + (255 - g) * factor))
+        b = min(255, int(b + (255 - b) * factor))
+        
+        # Convert back to hex
+        return f'#{r:02x}{g:02x}{b:02x}'
+    
+    def reset_theme(self):
+        """Reset to default Discord theme"""
+        self.apply_discord_theme()
+    
+    def apply_theme(self, new_colors):
+        """Apply a new color theme to the UI"""
+        # Store new colors
+        self.current_colors = new_colors
+        
+        # Update root background
+        self.root.configure(bg=new_colors["background"])
+        
+        # Update main container background
+        self.main_container.configure(bg=new_colors["background"])
+        
+        # Update content frame background
+        self.content_frame.configure(bg=new_colors["background"])
+        
+        # Recreate the UI with new colors
+        self.setup_main_ui()
+    
+    def show_about_screen(self):
+        """Show the about screen"""
+        # Clear current content
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Create a frame for the about page
+        about_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
+        about_frame.pack(fill="both", expand=True)
+        
+        # Header
+        header = tk.Label(
+            about_frame,
+            text="About RuneSlayer",
+            font=("Arial", 20, "bold"),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_bright"]
+        )
+        header.pack(pady=(0, 20), anchor="w")
+        
+        # About text
+        about_text = (
+            "RuneSlayer v1.0\n\n"
+            "A secure, advanced authentication system for game customization.\n\n"
+            "Features:\n"
+            "• Secure license key authentication\n"
+            "• Hardware ID (HWID) binding\n"
+            "• Usage tracking with cooldown system\n"
+            "• Customizable user interface\n\n"
+            "© 2025 RuneSlayer Team. All rights reserved."
+        )
+        
+        about_label = tk.Label(
+            about_frame,
+            text=about_text,
+            justify=tk.LEFT,
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"],
+            wraplength=500
+        )
+        about_label.pack(anchor="w", pady=10)
+        
+        # Version info at the bottom
+        version_label = tk.Label(
+            about_frame,
+            text=f"Version: 1.0 | Build Date: March 18, 2025",
+            font=("Arial", 8),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_muted"]
+        )
+        version_label.pack(anchor="w", pady=(20, 0))
 
 
 class AuthenticationApp:
