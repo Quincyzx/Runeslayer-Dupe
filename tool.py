@@ -43,8 +43,8 @@ import random
 from pathlib import Path
 
 # GitHub Configuration
-GITHUB_USER = "ruslanmv"        # GitHub username 
-GITHUB_REPO = "RuneSlayer"      # GitHub repository name
+GITHUB_USER = "Quincyzx"        # GitHub username 
+GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "main"          # GitHub branch name
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
 
