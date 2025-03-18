@@ -133,7 +133,18 @@ def update_cooldown_file():
     cooldown_file = get_cooldown_file_path()
     
     try:
-        # Create or update the cooldown file
+        # Check if the file exists and we're not on cooldown
+        on_cooldown, _ = is_on_cooldown()
+        if os.path.exists(cooldown_file) and not on_cooldown:
+            # Delete the existing file to avoid permission issues when updating
+            try:
+                os.remove(cooldown_file)
+                print(f"Deleted existing cooldown file at {cooldown_file}")
+            except Exception as e:
+                print(f"Error deleting cooldown file: {str(e)}")
+                # Continue anyway - we'll try to create a new file
+        
+        # Create a fresh cooldown file
         system_id = get_system_id()
         current_time = time.time()
         
@@ -148,10 +159,11 @@ def update_cooldown_file():
         if platform.system() == 'Windows':
             try:
                 subprocess.run(['attrib', '+h', cooldown_file], check=False)
-            except:
+            except Exception as e:
+                print(f"Error setting hidden attribute: {str(e)}")
                 pass
         
-        print(f"Cooldown file updated at {cooldown_file}")
+        print(f"Cooldown file created at {cooldown_file}")
         return True
     except Exception as e:
         print(f"Error updating cooldown file: {str(e)}")
