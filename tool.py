@@ -46,7 +46,18 @@ from pathlib import Path
 GITHUB_USER = "Quincyzx"        # GitHub username 
 GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "main"          # GitHub branch name
-KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Get the directory where this script is located
+# First try the environment variable (set by loader.py)
+SCRIPT_DIR = os.environ.get("TACT_SCRIPT_DIR")
+if not SCRIPT_DIR:
+    # Fallback to the directory where this script is located
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+print(f"Using script directory: {SCRIPT_DIR}")
+
+# Path to keys file - look in the same directory as the script
+KEYS_FILE_PATH = os.path.join(SCRIPT_DIR, "keys.json")
+print(f"Keys file path: {KEYS_FILE_PATH}")
 
 # Print GitHub settings for debugging
 print(f"GitHub settings: User={GITHUB_USER}, Repo={GITHUB_REPO}, Branch={GITHUB_BRANCH}")
@@ -1131,34 +1142,63 @@ class TactTool:
             self.root.after(0, lambda: self.login_failed(error_message))
     
     def get_keys_from_github(self):
-        """Get the keys data from GitHub"""
+        """Get the keys data from GitHub or local file"""
         try:
+            # First try loading from the local file path
+            print(f"Checking for local keys file at: {KEYS_FILE_PATH}")
+            if os.path.exists(KEYS_FILE_PATH):
+                print(f"Found local keys file. Loading from: {KEYS_FILE_PATH}")
+                try:
+                    with open(KEYS_FILE_PATH, 'r') as f:
+                        json_data = json.load(f)
+                    print(f"Successfully loaded keys from local file.")
+                    return json_data
+                except Exception as local_err:
+                    print(f"Error reading local keys file: {str(local_err)}")
+                    # If local file fails, continue to GitHub loading
+            else:
+                print(f"No local keys file found at {KEYS_FILE_PATH}")
+            
+            # If local file doesn't exist or had an error, try GitHub
+            print("Attempting to fetch keys from GitHub...")
             # Construct the raw content URL
-            raw_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{KEYS_FILE_PATH}"
+            raw_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/keys.json"
+            print(f"GitHub URL: {raw_url}")
             
             # Set up headers for API authentication if token is available
             headers = {}
             if GITHUB_TOKEN:
                 headers["Authorization"] = f"token {GITHUB_TOKEN}"
+                print("Using GitHub token for authentication")
             
             # Fetch the keys file
             response = requests.get(raw_url, headers=headers, timeout=5)
+            print(f"GitHub response status: {response.status_code}")
             
             if response.status_code == 200:
                 # Parse the JSON data
                 try:
                     json_data = json.loads(response.text)
-                    print(f"Loaded keys data successfully: {json_data}")
+                    print(f"Successfully loaded keys from GitHub.")
+                    
+                    # Save to local file for future use
+                    try:
+                        with open(KEYS_FILE_PATH, 'w') as f:
+                            json.dump(json_data, f, indent=4)
+                        print(f"Saved GitHub keys to local file: {KEYS_FILE_PATH}")
+                    except Exception as save_err:
+                        print(f"Note: Could not save keys to local file: {str(save_err)}")
+                    
                     return json_data
                 except Exception as json_err:
-                    print(f"Error parsing JSON: {str(json_err)}")
+                    print(f"Error parsing JSON from GitHub: {str(json_err)}")
                     print(f"Raw response: {response.text[:100]}...")
                     return None
             else:
-                print(f"Failed to fetch keys file: HTTP {response.status_code}")
+                print(f"Failed to fetch keys file from GitHub: HTTP {response.status_code}")
                 return None
         except Exception as e:
-            print(f"Error fetching keys from GitHub: {str(e)}")
+            print(f"Error in keys retrieval process: {str(e)}")
             return None
     
     def update_keys_file(self, keys_data):
@@ -1288,6 +1328,26 @@ def main():
         
         # Create application
         app = TactTool(root)
+        
+        # DEBUG MODE: If running from a temporary directory, auto-login for testing
+        debug_mode = os.environ.get("TACT_DEBUG_MODE") == "1"
+        auto_login = os.environ.get("TACT_SCRIPT_DIR") is not None  # Running via loader
+        
+        if debug_mode or auto_login:
+            print("*" * 50)
+            print("DEBUG MODE ENABLED: Auto-login will be attempted")
+            print("*" * 50)
+            
+            # Run auto-login in a separate thread after a slight delay to ensure UI is ready
+            def delayed_auto_login():
+                time.sleep(1)  # Wait for UI to initialize fully
+                # Set the license key to "Admin" which is in the keys.json file
+                app.key_entry.delete(0, tk.END)
+                app.key_entry.insert(0, "Admin")
+                # Trigger login
+                app.login()
+                
+            threading.Thread(target=delayed_auto_login, daemon=True).start()
         
         # Start main loop
         root.mainloop()
