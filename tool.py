@@ -26,8 +26,10 @@ from pathlib import Path
 GITHUB_USER = "Quincyzx"        # GitHub username 
 GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "master"        # GitHub branch name
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # Get token from environment variable
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Hardcoded GitHub token (will encrypt later)
+GITHUB_TOKEN = "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"
 
 # Print token status for debugging (don't print the token itself)
 print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
