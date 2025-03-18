@@ -497,36 +497,59 @@ class AuthenticationApp:
                             return
                 
                 if valid_key:
-                    # Authentication successful
-                    # Store user info
+                    # Get current HWID
                     current_hwid = str(uuid.getnode())  # MAC address as HWID
                     
+                    # Check if HWID is already set and matches
+                    stored_hwid = key_info.get("hwid")
+                    if stored_hwid and stored_hwid != current_hwid:
+                        print(f"HWID mismatch: stored {stored_hwid}, current {current_hwid}")
+                        self.root.after(0, lambda: self._update_auth_status(False, "HWID mismatch! License is bound to another system."))
+                        return
+                    
+                    # Authentication successful - continue
                     # Make sure key_info is not None
                     uses_remaining = 0
                     if key_info is not None:
                         uses_remaining = key_info.get("uses_remaining", 0)
                     
+                    # Decrement the uses for the key
+                    updated_uses = uses_remaining - 1
+                    print(f"Decrementing uses from {uses_remaining} to {updated_uses}")
+                    
                     self.user_info = {
                         "key": license_key,
-                        "uses_remaining": uses_remaining,
+                        "uses_remaining": updated_uses,
                         "hwid": current_hwid
                     }
                     
                     # Update the key in GitHub if possible
                     sha = self.get_sha_of_file()
                     if sha:
-                        # Update the key data
-                        keys_data["keys"][key_index]["uses_remaining"] -= 1
-                        if not keys_data["keys"][key_index].get("hwid"):
-                            keys_data["keys"][key_index]["hwid"] = current_hwid
+                        # Update the key data in the original JSON
+                        # Make sure we're updating the right key by checking again
+                        for idx, key_entry in enumerate(keys_data.get("keys", [])):
+                            if key_entry.get("key") == license_key:
+                                print(f"Updating key at index {idx}")
+                                # Decrement the uses_remaining value
+                                keys_data["keys"][idx]["uses_remaining"] = updated_uses
+                                # Set the HWID if not already set
+                                if not keys_data["keys"][idx].get("hwid"):
+                                    keys_data["keys"][idx]["hwid"] = current_hwid
+                                    print(f"Setting HWID for key: {current_hwid}")
+                                break
                         
                         # Update the file on GitHub
                         update_success = self.update_keys_on_github(keys_data, sha)
                         print(f"GitHub update success: {update_success}")
+                        
+                        if not update_success:
+                            print("Failed to update key uses on GitHub")
+                    else:
+                        print("Failed to get SHA for GitHub update")
                     
                     # Return successful authentication
-                    uses_remaining = self.user_info["uses_remaining"] - 1  # Decrement for display
-                    self.root.after(0, lambda: self._update_auth_status(True, f"Authentication successful! Uses remaining: {uses_remaining}"))
+                    self.root.after(0, lambda: self._update_auth_status(True, f"Authentication successful! Uses remaining: {updated_uses}"))
                     return
                 else:
                     # Invalid key
