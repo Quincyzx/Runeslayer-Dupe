@@ -257,6 +257,10 @@ class RuneSlayerTool:
         welcome_btn = self.create_nav_button(sidebar, "Home", self.show_welcome_screen)
         self.nav_buttons.append(welcome_btn)
         
+        # Profile Button
+        profile_btn = self.create_nav_button(sidebar, "Profile", self.show_profile_screen)
+        self.nav_buttons.append(profile_btn)
+        
         # Customization Button
         customize_btn = self.create_nav_button(sidebar, "Customize UI", self.show_customize_screen)
         self.nav_buttons.append(customize_btn)
@@ -364,6 +368,177 @@ class RuneSlayerTool:
                 justify=tk.LEFT
             )
             user_info_label.pack(pady=10)
+        
+        # Action Buttons Frame
+        buttons_frame = tk.Frame(welcome_frame, bg=self.current_colors["background"])
+        buttons_frame.pack(pady=20)
+        
+        # Dupe Button
+        dupe_btn = tk.Button(
+            buttons_frame,
+            text="Dupe",
+            font=("Arial", 12, "bold"),
+            bg=self.current_colors["primary"],
+            fg=self.current_colors["text_bright"],
+            activebackground=self.current_colors["primary_hover"],
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.RAISED,
+            padx=20,
+            pady=10,
+            width=12,
+            # This button doesn't do anything yet
+            command=lambda: None
+        )
+        dupe_btn.pack(side="left", padx=(0, 15))
+        
+        # End Dupe Button
+        end_dupe_btn = tk.Button(
+            buttons_frame,
+            text="End Dupe",
+            font=("Arial", 12, "bold"),
+            bg=self.current_colors["danger"],
+            fg=self.current_colors["text_bright"],
+            activebackground="#d04040",
+            activeforeground=self.current_colors["text_bright"],
+            relief=tk.RAISED,
+            padx=20,
+            pady=10,
+            width=12,
+            # This button doesn't do anything yet
+            command=lambda: None
+        )
+        end_dupe_btn.pack(side="left")
+    
+    def show_profile_screen(self):
+        """Show the user profile screen"""
+        # Clear current content
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+        
+        # Create a frame for profile information
+        profile_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
+        profile_frame.pack(fill="both", expand=True)
+        
+        # Header
+        header = tk.Label(
+            profile_frame,
+            text="User Profile",
+            font=("Arial", 20, "bold"),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_bright"]
+        )
+        header.pack(pady=(0, 30), anchor="w")
+        
+        # If user info is available
+        if self.user_info:
+            # Create inner frame for profile details
+            details_frame = tk.Frame(profile_frame, bg=self.current_colors["background_secondary"], padx=20, pady=20)
+            details_frame.pack(fill="x", padx=20)
+            
+            # Format user info for display
+            key = self.user_info.get('key', 'Unknown')
+            uses = self.user_info.get('uses_remaining', 0)
+            hwid = self.user_info.get('hwid', 'Unknown')
+            created = self.user_info.get('created', 'Unknown')
+            last_use = self.user_info.get('last_used', 'Unknown')
+            
+            # Create a table-like display
+            headers = ["License Key", "Uses Remaining", "HWID", "Created", "Last Used"]
+            values = [key, str(uses), hwid, created, last_use]
+            
+            # Create grid of labels
+            for i, (header, value) in enumerate(zip(headers, values)):
+                # Header label
+                header_label = tk.Label(
+                    details_frame,
+                    text=f"{header}:",
+                    font=("Arial", 11, "bold"),
+                    bg=self.current_colors["background_secondary"],
+                    fg=self.current_colors["text_bright"],
+                    anchor="w"
+                )
+                header_label.grid(row=i, column=0, sticky="w", pady=10)
+                
+                # Value label
+                value_label = tk.Label(
+                    details_frame,
+                    text=value,
+                    font=("Arial", 11),
+                    bg=self.current_colors["background_secondary"],
+                    fg=self.current_colors["text"],
+                    anchor="w",
+                    wraplength=350
+                )
+                value_label.grid(row=i, column=1, sticky="w", padx=20, pady=10)
+            
+            # Additional information section
+            additional_frame = tk.Frame(profile_frame, bg=self.current_colors["background"], pady=20)
+            additional_frame.pack(fill="x", pady=20)
+            
+            additional_label = tk.Label(
+                additional_frame,
+                text="Usage Statistics",
+                font=("Arial", 14, "bold"),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["text_bright"]
+            )
+            additional_label.pack(anchor="w")
+            
+            # Simple usage stats (placeholder info)
+            stats_frame = tk.Frame(additional_frame, bg=self.current_colors["background"], padx=20, pady=10)
+            stats_frame.pack(fill="x")
+            
+            # Current session time
+            session_label = tk.Label(
+                stats_frame,
+                text="Current Session Time:",
+                font=("Arial", 11),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["text"],
+                anchor="w"
+            )
+            session_label.grid(row=0, column=0, sticky="w", pady=5)
+            
+            session_time = tk.Label(
+                stats_frame,
+                text="Just started",
+                font=("Arial", 11),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["primary"],
+                anchor="w"
+            )
+            session_time.grid(row=0, column=1, sticky="w", padx=20, pady=5)
+            
+            # Cooldown status
+            cooldown_label = tk.Label(
+                stats_frame,
+                text="Cooldown Status:",
+                font=("Arial", 11),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["text"],
+                anchor="w"
+            )
+            cooldown_label.grid(row=1, column=0, sticky="w", pady=5)
+            
+            cooldown_status = tk.Label(
+                stats_frame,
+                text="No cooldown active",
+                font=("Arial", 11),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["success"],
+                anchor="w"
+            )
+            cooldown_status.grid(row=1, column=1, sticky="w", padx=20, pady=5)
+        else:
+            # If no user info is available
+            no_info_label = tk.Label(
+                profile_frame,
+                text="User information not available",
+                font=("Arial", 14),
+                bg=self.current_colors["background"],
+                fg=self.current_colors["warning"]
+            )
+            no_info_label.pack(pady=50)
     
     def show_customize_screen(self):
         """Show the UI customization screen"""
