@@ -990,11 +990,15 @@ class TactTool:
             
             # Get the HWID for verification
             system_hwid = get_system_id()
+            print(f"Current system HWID: {system_hwid}")
             
             # Look for the license key
             key_found = False
             hwid_match = False
             user_info = None
+            need_keys_update = False
+            # Store keys_data for later update
+            self.keys_data = keys_data
             
             # Get the keys list from the JSON structure
             print(f"Processing keys_data: {keys_data}")
@@ -1020,24 +1024,72 @@ class TactTool:
                     
                     # Check uses remaining
                     uses_remaining = user.get("uses_remaining", 0)
-                    if uses_remaining <= 0:
+                    
+                    # Convert uses_remaining to int if it's stored as a string
+                    if isinstance(uses_remaining, str):
+                        try:
+                            uses_remaining = int(uses_remaining)
+                            user["uses_remaining"] = uses_remaining
+                            need_keys_update = True
+                        except ValueError:
+                            print(f"Warning: Could not convert uses_remaining '{uses_remaining}' to integer")
+                    
+                    # Check if we should decrement uses (don't decrement Admin key)
+                    if key != "Admin" and isinstance(uses_remaining, int) and uses_remaining > 0:
+                        # Decrement the uses_remaining counter
+                        user["uses_remaining"] = uses_remaining - 1
+                        need_keys_update = True
+                        print(f"Decremented uses_remaining for key {key}: {uses_remaining} -> {uses_remaining - 1}")
+                    else:
+                        print(f"Not decrementing uses for Admin key or already at 0 uses")
+                            
+                    # Check if out of uses after decrementing
+                    remaining = user.get("uses_remaining", 0)
+                    if isinstance(remaining, int) and remaining <= 0 and key != "Admin":
                         self.root.after(0, lambda: self.login_failed("License key has no uses remaining."))
                         return
                     
+                    # Handle HWID checking
+                    stored_hwid = user.get("hwid", "")
+                    
+                    # Check if debug mode is enabled
+                    debug_mode = os.environ.get("TACT_DEBUG_MODE") == "1"
+                    is_admin_key = (key == "Admin")
+                    
+                    # Print HWID comparison for debugging
+                    print(f"HWID Check - Current: {system_hwid}")
+                    print(f"HWID Check - Stored: {stored_hwid}")
+                    print(f"Debug Mode: {debug_mode}")
+                    print(f"Admin Key: {is_admin_key}")
+                    
                     # Check HWID if it has been set and HWID check is enabled
-                    if ENABLE_HWID_CHECK and "hwid" in user:
-                        if user["hwid"] == system_hwid:
+                    if ENABLE_HWID_CHECK:
+                        if stored_hwid == system_hwid:
+                            # HWID matches
                             hwid_match = True
-                        elif not user["hwid"]:
+                            print("HWID match: True")
+                        elif not stored_hwid:
                             # No HWID set yet, update it
                             hwid_match = True
                             user["hwid"] = system_hwid
-                            
-                            # Try to update the keys file
-                            self.update_keys_file(keys_data)
+                            need_keys_update = True
+                            print(f"No HWID stored - setting to current: {system_hwid}")
+                        elif debug_mode or is_admin_key:
+                            # In debug mode or using Admin key, show HWID mismatch but continue
+                            print("*" * 50)
+                            print(f"HWID MISMATCH BUT CONTINUING (Debug mode or Admin key)")
+                            print(f"Current HWID: {system_hwid}")
+                            print(f"Expected HWID: {stored_hwid}")
+                            print("*" * 50)
+                            hwid_match = True
+                        else:
+                            # HWID mismatch
+                            hwid_match = False
+                            print("HWID match: False")
                     else:
                         # No HWID check or HWID not required
                         hwid_match = True
+                        print("HWID check disabled")
                     
                     break
             
@@ -1147,6 +1199,11 @@ class TactTool:
                 ],
                 color=0x43B581  # Green
             )
+            
+            # Update keys file if needed
+            if need_keys_update:
+                print("Updating keys file with new data")
+                self.update_keys_file(self.keys_data)
             
             # Switch to main UI
             self.root.after(0, self.setup_main_ui)
