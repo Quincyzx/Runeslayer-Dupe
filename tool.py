@@ -1193,10 +1193,10 @@ class RuneSlayerTool:
             self.stop_btn.config(state=tk.DISABLED)
 
 # GitHub Configuration - Must match loader.py
-GITHUB_USER = "runeslayer"      # GitHub username 
-GITHUB_REPO = "runeslayer-tool" # GitHub repository name
+GITHUB_USER = "Quincyzx"        # GitHub username 
+GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-KEYS_FILE_PATH = "keys.json"  # Path to keys file in GitHub repo and local directory
+KEYS_FILE_PATH = "keys.json"  # Path to keys file in GitHub repo
 
 class AuthenticationApp:
     """Authentication window for RuneSlayer"""
@@ -1317,6 +1317,65 @@ class AuthenticationApp:
             self.login_status_var.set(f"Authentication error: {str(e)}")
             self.login_button.config(state=tk.NORMAL)
     
+    def get_sha_of_file(self):
+        """Get the SHA of the keys file on GitHub (required for updating)"""
+        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{KEYS_FILE_PATH}"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        try:
+            response = requests.get(api_url, headers=headers)
+            
+            if response.status_code == 200:
+                file_data = response.json()
+                sha = file_data.get('sha')
+                if sha:
+                    return sha
+                else:
+                    print(f"SHA not found in response: {file_data}")
+                    return None
+            else:
+                print(f"Error getting file info: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            print(f"Exception getting SHA: {str(e)}")
+            return None
+    
+    def update_keys_on_github(self, keys_data, sha):
+        """Update the keys file on GitHub after using a key"""
+        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{KEYS_FILE_PATH}"
+        
+        # Prepare the content for the file
+        content = json.dumps(keys_data, indent=4)
+        
+        # GitHub API requires Base64 encoded content
+        encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+        
+        # Set up headers
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        data = {
+            "message": "Update keys after authentication",
+            "content": encoded_content,
+            "sha": sha  # Use the retrieved SHA for the update
+        }
+        
+        try:
+            response = requests.put(api_url, json=data, headers=headers)
+            
+            if response.status_code in (200, 201):
+                print("Successfully updated keys.json on GitHub.")
+                return True
+            else:
+                print(f"Error updating keys.json on GitHub: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            print(f"Exception updating keys: {str(e)}")
+            return False
+    
     def _authenticate_thread(self, license_key):
         """Authentication process in a separate thread"""
         try:
@@ -1327,28 +1386,11 @@ class AuthenticationApp:
             print("Attempting to download keys.json from GitHub...")
             success, result = self.download_file_from_github(KEYS_FILE_PATH)
             
-            # If GitHub download fails, try to use local keys.json for development
+            # If GitHub download fails, show error and return
             if not success:
                 print(f"GitHub download failed: {result}")
-                try:
-                    # Use local keys.json if available
-                    local_path = KEYS_FILE_PATH  # The local file in the current directory
-                    print(f"Looking for local file at: {os.path.abspath(local_path)}")
-                    
-                    if os.path.exists(local_path):
-                        print(f"Found local keys.json file")
-                        with open(local_path, 'r') as file:
-                            result = file.read()
-                            success = True
-                            print(f"Successfully read local keys.json file")
-                    else:
-                        print(f"Local keys.json file not found")
-                        self.root.after(0, lambda: self._update_auth_status(False, f"Failed to download authentication data: {result}"))
-                        return
-                except Exception as e:
-                    print(f"Error reading local file: {str(e)}")
-                    self.root.after(0, lambda: self._update_auth_status(False, f"Failed to read local keys file: {str(e)}"))
-                    return
+                self.root.after(0, lambda: self._update_auth_status(False, f"Failed to download authentication data: {result}"))
+                return
             
             # Parse keys data
             try:
@@ -1364,6 +1406,7 @@ class AuthenticationApp:
             print(f"Verifying license key: {license_key}")
             valid_key = False
             key_info = None
+            key_index = -1
             
             # Print all available keys for debugging
             print("Available keys in the database:")
@@ -1378,6 +1421,7 @@ class AuthenticationApp:
                     if uses_remaining > 0:
                         valid_key = True
                         key_info = key_entry
+                        key_index = idx
                         print("Key is valid with uses remaining!")
                         break
                     else:
@@ -1409,8 +1453,22 @@ class AuthenticationApp:
                 "hwid": current_hwid
             }
             
-            # In a real app we would update the HWID and decrement uses here
-            uses_remaining = self.user_info.get('uses_remaining', 0)
+            # Update the key in GitHub
+            # 1. Decrement the uses remaining
+            # 2. Set the HWID if not already set
+            # First get the file SHA (required for GitHub API update)
+            sha = self.get_sha_of_file()
+            if sha:
+                # Update the key data
+                keys_data["keys"][key_index]["uses_remaining"] -= 1
+                if not keys_data["keys"][key_index].get("hwid"):
+                    keys_data["keys"][key_index]["hwid"] = current_hwid
+                
+                # Update the file on GitHub
+                self.update_keys_on_github(keys_data, sha)
+            
+            # Return successful authentication
+            uses_remaining = self.user_info.get('uses_remaining', 0) - 1  # Already decremented
             
             self.root.after(0, lambda: self._update_auth_status(True, f"Authentication successful! Uses remaining: {uses_remaining}"))
             
