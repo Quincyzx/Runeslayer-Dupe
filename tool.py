@@ -41,7 +41,7 @@ class TactTool:
         self.root.geometry("800x500")
         self.root.minsize(800, 500)
         self.root.configure(bg=COLORS["background"])
-        
+
         # Center window
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -49,26 +49,26 @@ class TactTool:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
-        
+
         # Variables
         self.script_dir = os.environ.get("TACT_SCRIPT_DIR", os.path.dirname(__file__))
         self.keys_file = os.path.join(self.script_dir, "keys.json")
         self.license_key = None
         self.user_info = None
-        
+
         # Set up authentication UI
         self.setup_auth_ui()
-        
+
         # Register cleanup
         if os.environ.get("TACT_CLEANUP_ON_EXIT") == "1":
             atexit.register(self.cleanup)
-            
+
     def setup_auth_ui(self):
         """Set up the authentication UI"""
         # Main container
         self.auth_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.auth_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, width=400)
-        
+
         # Title
         title_label = tk.Label(
             self.auth_frame,
@@ -78,11 +78,11 @@ class TactTool:
             fg=COLORS["text_bright"]
         )
         title_label.pack(pady=(0, 20))
-        
+
         # License key entry
         key_frame = tk.Frame(self.auth_frame, bg=COLORS["background"])
         key_frame.pack(pady=(0, 20), fill=tk.X)
-        
+
         key_label = tk.Label(
             key_frame,
             text="License Key:",
@@ -90,7 +90,7 @@ class TactTool:
             fg=COLORS["text"]
         )
         key_label.pack(side=tk.LEFT, padx=(0, 10))
-        
+
         self.key_entry = tk.Entry(
             key_frame,
             bg=COLORS["input_bg"],
@@ -100,7 +100,7 @@ class TactTool:
             width=30
         )
         self.key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
+
         # Login button
         self.login_button = tk.Button(
             self.auth_frame,
@@ -115,11 +115,11 @@ class TactTool:
             command=self.login
         )
         self.login_button.pack(pady=(0, 20))
-        
+
         # Status message
         self.status_var = tk.StringVar()
         self.status_var.set("Enter your license key to continue")
-        
+
         status_label = tk.Label(
             self.auth_frame,
             textvariable=self.status_var,
@@ -128,42 +128,42 @@ class TactTool:
             wraplength=400
         )
         status_label.pack()
-        
+
     def login(self):
         """Handle login attempt"""
         key = self.key_entry.get().strip()
         if not key:
             self.status_var.set("Please enter a license key")
             return
-            
+
         # Verify license
         success, user_data, message = verify_license(key, self.keys_file)
-        
+
         if success:
             self.license_key = key
             self.user_info = user_data
-            
+
             # Update usage count
             update_success, update_message = update_usage(key, self.keys_file)
             if not update_success:
                 messagebox.showwarning("Warning", f"Usage tracking error: {update_message}")
-            
+
             # Switch to main UI
             self.setup_main_ui()
         else:
             self.status_var.set(f"Authentication failed: {message}")
-            
+
     def setup_main_ui(self):
         """Set up the main UI after authentication"""
         # Remove authentication UI
         self.auth_frame.destroy()
-        
+
         # Create main UI
         self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.main_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, width=700, height=400)
-        
-        # Title with user info
-        title_text = f"Welcome, {self.user_info.get('username', 'User')}"
+
+        # Title with key info
+        title_text = f"Welcome - {self.license_key}"
         title_label = tk.Label(
             self.main_frame,
             text=title_text,
@@ -172,10 +172,10 @@ class TactTool:
             fg=COLORS["text_bright"]
         )
         title_label.pack(pady=(0, 20))
-        
+
         # Usage info
-        uses_left = self.user_info.get('uses', 0)
-        uses_text = f"Uses remaining: {uses_left}"
+        uses_remaining = self.user_info.get('uses_remaining', 0)
+        uses_text = f"Uses remaining: {uses_remaining}"
         uses_label = tk.Label(
             self.main_frame,
             text=uses_text,
@@ -183,11 +183,22 @@ class TactTool:
             fg=COLORS["text"]
         )
         uses_label.pack(pady=(0, 20))
-        
+
+        # HWID info
+        hwid = self.user_info.get('hwid', 'Not registered')
+        hwid_text = f"Hardware ID: {hwid[:16]}..."
+        hwid_label = tk.Label(
+            self.main_frame,
+            text=hwid_text,
+            bg=COLORS["background"],
+            fg=COLORS["text_muted"]
+        )
+        hwid_label.pack(pady=(0, 20))
+
         # Main content area
         content_frame = tk.Frame(self.main_frame, bg=COLORS["background_secondary"])
         content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
+
         # Example tool functionality
         tool_label = tk.Label(
             content_frame,
@@ -196,7 +207,7 @@ class TactTool:
             fg=COLORS["text"]
         )
         tool_label.pack(pady=20)
-        
+
         # Exit button
         exit_button = tk.Button(
             self.main_frame,
@@ -211,12 +222,12 @@ class TactTool:
             command=self.exit_application
         )
         exit_button.pack(pady=20)
-        
+
     def exit_application(self):
         """Exit the application"""
         if messagebox.askokcancel("Exit", "Are you sure you want to exit?"):
             self.root.quit()
-            
+
     def cleanup(self):
         """Clean up temporary files"""
         try:
