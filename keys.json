@@ -1,12 +1,24 @@
 {
-    "Tact": {
-        "key": "ANGejmLkZ1RX",
-        "hwid": "0",
-        "keys_left": 1
-    },
-    "Koto": {
-        "key": "ihUJnQBDpD6O",
-        "hwid": "0",
-        "keys_left": 15
-    }
+  "user1": {
+    "key": "ABCD-1234-EFGH-5678",
+    "hwid": "0",
+    "uses": 5,
+    "last_login": "",
+    "created_date": "2025-03-15 14:30:00"
+  },
+  "user2": {
+    "key": "WXYZ-9876-LMNO-5432",
+    "hwid": "0",
+    "uses": 3,
+    "last_login": "",
+    "created_date": "2025-03-16 09:15:00"
+  },
+  "premium_user": {
+    "key": "PREM-1111-GOLD-2222",
+    "hwid": "0",
+    "uses": 999,
+    "last_login": "",
+    "created_date": "2025-03-17 12:00:00",
+    "premium": true
+  }
 }
