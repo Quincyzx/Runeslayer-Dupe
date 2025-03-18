@@ -18,29 +18,28 @@ from auth_utils import verify_license, update_usage
 APP_TITLE = "Tact Tool"
 VERSION = "1.0"
 
-# Color theme - Discord inspired
+# Modern dark theme colors
 COLORS = {
-    "background": "#36393F",
-    "background_secondary": "#2F3136",
-    "text": "#DCDDDE",
-    "text_muted": "#72767D",
-    "text_bright": "#FFFFFF",
-    "primary": "#5865F2",
-    "primary_hover": "#4752C4",
-    "success": "#43B581",
-    "warning": "#FAA61A",
-    "danger": "#F04747",
-    "danger_hover": "#d04040",  # Added hover color for danger button
-    "border": "#42454A",
-    "input_bg": "#40444B"
+    "background": "#1a1a1a",  # Dark background
+    "secondary_bg": "#242424",  # Slightly lighter background
+    "accent": "#00a8ff",  # Bright blue accent
+    "accent_hover": "#0097e6",
+    "text": "#ffffff",
+    "text_secondary": "#b3b3b3",
+    "success": "#2ecc71",
+    "warning": "#f1c40f",
+    "danger": "#e74c3c",
+    "danger_hover": "#c0392b",
+    "border": "#333333",
+    "input_bg": "#333333"
 }
 
 class TactTool:
     def __init__(self, root):
         self.root = root
         self.root.title(APP_TITLE)
-        self.root.geometry("800x500")
-        self.root.minsize(800, 500)
+        self.root.geometry("900x600")
+        self.root.minsize(900, 600)
         self.root.configure(bg=COLORS["background"])
 
         # Center window
@@ -57,12 +56,43 @@ class TactTool:
         self.license_key = None
         self.user_info = None
 
+        # Configure ttk styles
+        self.setup_styles()
+
         # Set up authentication UI
         self.setup_auth_ui()
 
         # Register cleanup
         if os.environ.get("TACT_CLEANUP_ON_EXIT") == "1":
             atexit.register(self.cleanup)
+
+    def setup_styles(self):
+        """Set up custom ttk styles"""
+        style = ttk.Style()
+
+        # Configure tab style
+        style.configure(
+            "Custom.TNotebook",
+            background=COLORS["background"],
+            borderwidth=0
+        )
+        style.configure(
+            "Custom.TNotebook.Tab",
+            padding=[20, 10],
+            background=COLORS["secondary_bg"],
+            foreground=COLORS["text"],
+        )
+        style.map(
+            "Custom.TNotebook.Tab",
+            background=[("selected", COLORS["accent"])],
+            foreground=[("selected", COLORS["text"])]
+        )
+
+        # Configure frame style
+        style.configure(
+            "Custom.TFrame",
+            background=COLORS["background"]
+        )
 
     def setup_auth_ui(self):
         """Set up the authentication UI"""
@@ -74,11 +104,11 @@ class TactTool:
         title_label = tk.Label(
             self.auth_frame,
             text="Tact Tool",
-            font=("Arial", 24, "bold"),
+            font=("Segoe UI", 32, "bold"),
             bg=COLORS["background"],
-            fg=COLORS["text_bright"]
+            fg=COLORS["accent"]
         )
-        title_label.pack(pady=(0, 20))
+        title_label.pack(pady=(0, 30))
 
         # License key entry
         key_frame = tk.Frame(self.auth_frame, bg=COLORS["background"])
@@ -86,36 +116,39 @@ class TactTool:
 
         key_label = tk.Label(
             key_frame,
-            text="License Key:",
+            text="License Key",
+            font=("Segoe UI", 12),
             bg=COLORS["background"],
             fg=COLORS["text"]
         )
-        key_label.pack(side=tk.LEFT, padx=(0, 10))
+        key_label.pack(anchor=tk.W, padx=(0, 10), pady=(0, 5))
 
         self.key_entry = tk.Entry(
             key_frame,
+            font=("Segoe UI", 12),
             bg=COLORS["input_bg"],
-            fg=COLORS["text_bright"],
-            insertbackground=COLORS["text_bright"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
             relief=tk.FLAT,
             width=30
         )
-        self.key_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.key_entry.pack(fill=tk.X, ipady=8)
 
         # Login button
         self.login_button = tk.Button(
             self.auth_frame,
-            text="Login",
-            bg=COLORS["primary"],
-            fg=COLORS["text_bright"],
-            activebackground=COLORS["primary_hover"],
-            activeforeground=COLORS["text_bright"],
+            text="LOGIN",
+            font=("Segoe UI", 12, "bold"),
+            bg=COLORS["accent"],
+            fg=COLORS["text"],
+            activebackground=COLORS["accent_hover"],
+            activeforeground=COLORS["text"],
             relief=tk.FLAT,
-            padx=20,
-            pady=10,
+            padx=40,
+            pady=12,
             command=self.login
         )
-        self.login_button.pack(pady=(0, 20))
+        self.login_button.pack(pady=(20, 30))
 
         # Status message
         self.status_var = tk.StringVar()
@@ -124,8 +157,9 @@ class TactTool:
         status_label = tk.Label(
             self.auth_frame,
             textvariable=self.status_var,
+            font=("Segoe UI", 10),
             bg=COLORS["background"],
-            fg=COLORS["text_muted"],
+            fg=COLORS["text_secondary"],
             wraplength=400
         )
         status_label.pack()
@@ -159,70 +193,119 @@ class TactTool:
         # Remove authentication UI
         self.auth_frame.destroy()
 
-        # Create main UI
-        self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
-        self.main_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, width=700, height=400)
+        # Create main UI with tabs
+        self.main_frame = ttk.Frame(self.root, style="Custom.TFrame")
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Title with key info
-        title_text = f"Welcome - {self.license_key}"
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self.main_frame, style="Custom.TNotebook")
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+
+        # Create Profile tab
+        self.profile_tab = ttk.Frame(self.notebook, style="Custom.TFrame")
+        self.notebook.add(self.profile_tab, text="Profile")
+        self.setup_profile_tab()
+
+        # Create Main tab
+        self.main_tab = ttk.Frame(self.notebook, style="Custom.TFrame")
+        self.notebook.add(self.main_tab, text="Main")
+        self.setup_main_tab()
+
+    def setup_profile_tab(self):
+        """Set up the profile tab content"""
+        # Profile container
+        profile_frame = tk.Frame(self.profile_tab, bg=COLORS["background"])
+        profile_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
+
+        # Title
         title_label = tk.Label(
-            self.main_frame,
-            text=title_text,
-            font=("Arial", 24, "bold"),
+            profile_frame,
+            text="User Profile",
+            font=("Segoe UI", 24, "bold"),
             bg=COLORS["background"],
-            fg=COLORS["text_bright"]
+            fg=COLORS["accent"]
         )
-        title_label.pack(pady=(0, 20))
+        title_label.pack(anchor=tk.W, pady=(0, 30))
 
-        # Usage info
-        uses_remaining = max(0, self.user_info.get('uses_remaining', 0) - 1)  # Subtract 1 to account for API delay
-        uses_text = f"Uses remaining: {uses_remaining}"
-        uses_label = tk.Label(
-            self.main_frame,
-            text=uses_text,
-            bg=COLORS["background"],
-            fg=COLORS["text"]
-        )
-        uses_label.pack(pady=(0, 20))
+        # User info container
+        info_frame = tk.Frame(profile_frame, bg=COLORS["secondary_bg"])
+        info_frame.pack(fill=tk.X, pady=(0, 20), ipady=20)
+
+        # License Key info
+        self.create_info_row(info_frame, "License Key", self.license_key, 0)
+
+        # Uses info
+        uses_remaining = max(0, self.user_info.get('uses_remaining', 0) - 1)
+        self.create_info_row(info_frame, "Uses Remaining", str(uses_remaining), 1)
 
         # HWID info
         hwid = self.user_info.get('hwid', 'Not registered')
-        hwid_text = f"Hardware ID: {hwid[:16]}..."
-        hwid_label = tk.Label(
-            self.main_frame,
-            text=hwid_text,
-            bg=COLORS["background"],
-            fg=COLORS["text_muted"]
-        )
-        hwid_label.pack(pady=(0, 20))
+        self.create_info_row(info_frame, "Hardware ID", hwid[:16] + "...", 2)
 
-        # Main content area
-        content_frame = tk.Frame(self.main_frame, bg=COLORS["background_secondary"])
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    def create_info_row(self, parent, label, value, row):
+        """Create a row of information in the profile tab"""
+        # Label
+        tk.Label(
+            parent,
+            text=label,
+            font=("Segoe UI", 12),
+            bg=COLORS["secondary_bg"],
+            fg=COLORS["text_secondary"]
+        ).grid(row=row, column=0, padx=20, pady=10, sticky=tk.W)
+
+        # Value
+        tk.Label(
+            parent,
+            text=value,
+            font=("Segoe UI", 12, "bold"),
+            bg=COLORS["secondary_bg"],
+            fg=COLORS["text"]
+        ).grid(row=row, column=1, padx=20, pady=10, sticky=tk.W)
+
+    def setup_main_tab(self):
+        """Set up the main tab content"""
+        main_frame = tk.Frame(self.main_tab, bg=COLORS["background"])
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
+
+        # Title
+        title_label = tk.Label(
+            main_frame,
+            text="Main Dashboard",
+            font=("Segoe UI", 24, "bold"),
+            bg=COLORS["background"],
+            fg=COLORS["accent"]
+        )
+        title_label.pack(anchor=tk.W, pady=(0, 30))
+
+        # Content area
+        content_frame = tk.Frame(main_frame, bg=COLORS["secondary_bg"])
+        content_frame.pack(fill=tk.BOTH, expand=True)
 
         # Example tool functionality
         tool_label = tk.Label(
             content_frame,
             text="Tool functionality goes here",
-            bg=COLORS["background_secondary"],
+            font=("Segoe UI", 14),
+            bg=COLORS["secondary_bg"],
             fg=COLORS["text"]
         )
-        tool_label.pack(pady=20)
+        tool_label.pack(pady=40)
 
-        # Exit button
+        # Exit button at the bottom
         exit_button = tk.Button(
             self.main_frame,
-            text="Exit",
+            text="EXIT",
+            font=("Segoe UI", 12, "bold"),
             bg=COLORS["danger"],
-            fg=COLORS["text_bright"],
+            fg=COLORS["text"],
             activebackground=COLORS["danger_hover"],
-            activeforeground=COLORS["text_bright"],
+            activeforeground=COLORS["text"],
             relief=tk.FLAT,
-            padx=20,
+            padx=30,
             pady=10,
             command=self.exit_application
         )
-        exit_button.pack(pady=20)
+        exit_button.pack(side=tk.BOTTOM, pady=20)
 
     def exit_application(self):
         """Exit the application"""
