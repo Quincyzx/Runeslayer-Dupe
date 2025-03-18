@@ -29,7 +29,7 @@ GITHUB_BRANCH = "master"        # GitHub branch name
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
 
 # Hardcoded GitHub token (will encrypt later)
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 
 # Print token status for debugging (don't print the token itself)
 print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
