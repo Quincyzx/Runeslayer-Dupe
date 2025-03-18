@@ -175,7 +175,7 @@ class TactTool:
         title_label.pack(pady=(0, 20))
 
         # Usage info
-        uses_remaining = self.user_info.get('uses_remaining', 0)
+        uses_remaining = max(0, self.user_info.get('uses_remaining', 0) - 1)  # Subtract 1 to account for API delay
         uses_text = f"Uses remaining: {uses_remaining}"
         uses_label = tk.Label(
             self.main_frame,
