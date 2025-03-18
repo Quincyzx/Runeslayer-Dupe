@@ -1,14 +1,21 @@
 {
-  "username1": {
-    "key": "user_key_here",
-    "uses": 10,
-    "hwid": "0", 
-    "last_login": ""
-  },
-  "username2": {
-    "key": "another_key",
-    "uses": 5,
-    "hwid": "0",
-    "last_login": ""
-  }
+  "keys": [
+    {
+      "key": "RUNE-SLAYER-1234-ABCD-5678-EFGH-9012",
+      "uses_remaining": 100,
+      "hwid": ""
+    },
+    {
+      "key": "RUNE-SLAYER-5678-IJKL-9012-MNOP-3456",
+      "uses_remaining": 50,
+      "hwid": ""
+    },
+    {
+      "key": "RUNE-SLAYER-9012-QRST-3456-UVWX-7890",
+      "uses_remaining": 10,
+      "hwid": ""
+    }
+  ],
+  "version": "1.0",
+  "last_updated": "2025-03-18"
 }
