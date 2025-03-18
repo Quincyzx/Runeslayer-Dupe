@@ -1,14 +1,14 @@
 {
-    "keys": [
-        {
-            "key": "RUNE-SLAYER-1234-ABCD-5678-EFGH-9012",
-            "uses_remaining": 5,
-            "hwid": ""
-        },
-        {
-            "key": "TEST-KEY-ABCD-1234-EFGH-5678-WXYZ",
-            "uses_remaining": 10,
-            "hwid": ""
-        }
-    ]
+  "keys": [
+    {
+      "key": "RUNE-SLAYER-1234-ABCD-5678-EFGH-9012",
+      "uses_remaining": 5,
+      "hwid": ""
+    },
+    {
+      "key": "TEST-KEY-ABCD-1234-EFGH-5678-WXYZ",
+      "uses_remaining": 10,
+      "hwid": ""
+    }
+  ]
 }
