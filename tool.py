@@ -16,6 +16,11 @@ import tempfile
 import atexit
 import sys
 import subprocess
+import time
+import datetime
+import platform
+import hashlib
+from pathlib import Path
 
 # GitHub Configuration
 GITHUB_USER = "Quincyzx"        # GitHub username 
@@ -27,6 +32,123 @@ KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
 # Debug output for GitHub token
 print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
 print(f"Tool.py - Current environment variables: {list(os.environ.keys())}")
+
+# Cooldown configuration
+COOLDOWN_MINUTES = 6  # 6 minute cooldown period
+
+def get_system_id():
+    """Get a unique system identifier based on hardware"""
+    # Get hardware info that's difficult to change
+    hw_info = f"{platform.node()}:{platform.machine()}:{str(uuid.getnode())}"
+    # Create a hash of the hardware info
+    return hashlib.sha256(hw_info.encode()).hexdigest()
+
+def get_cooldown_file_path():
+    """Get the path to the hidden cooldown file"""
+    system_id = get_system_id()
+    
+    # Determine OS type to find appropriate hidden location
+    if platform.system() == 'Windows':
+        # On Windows, use AppData\Local\Microsoft\Crypto folder (rarely accessed by users)
+        base_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Crypto')
+        if not os.path.exists(base_dir):
+            # Fallback to a different hidden location
+            base_dir = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'Internet Explorer', 'Recovery')
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir, exist_ok=True)
+        
+        # Create a hidden filename that looks like system file
+        filename = f"MS{system_id[:8]}.dat"
+        
+    elif platform.system() == 'Darwin':  # macOS
+        # On macOS, use Library/Application Support/com.apple.TCC
+        base_dir = os.path.expanduser('~/Library/Application Support/com.apple.TCC')
+        if not os.path.exists(base_dir):
+            base_dir = os.path.expanduser('~/Library/Caches/com.apple.AppleDB')
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir, exist_ok=True)
+        
+        # Create a hidden filename with dot prefix
+        filename = f".apple_db_{system_id[:8]}.plist"
+        
+    else:  # Linux and others
+        # On Linux, use .config/dconf folder
+        base_dir = os.path.expanduser('~/.config/dconf')
+        if not os.path.exists(base_dir):
+            base_dir = os.path.expanduser('~/.local/share/system-cache')
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir, exist_ok=True)
+        
+        # Create a hidden filename with dot prefix
+        filename = f".system_{system_id[:8]}.cache"
+    
+    # Return the full path
+    return os.path.join(base_dir, filename)
+
+def is_on_cooldown():
+    """Check if the application is on cooldown"""
+    cooldown_file = get_cooldown_file_path()
+    
+    try:
+        # Check if cooldown file exists
+        if os.path.exists(cooldown_file):
+            # Read the last usage timestamp from file
+            with open(cooldown_file, 'r') as f:
+                try:
+                    content = f.read().strip()
+                    # Parse the timestamp
+                    parts = content.split('|')
+                    if len(parts) >= 2:
+                        last_used_str = parts[1]
+                        last_used = float(last_used_str)
+                        
+                        # Calculate time elapsed since last usage
+                        current_time = time.time()
+                        elapsed_minutes = (current_time - last_used) / 60
+                        
+                        print(f"Last usage was {elapsed_minutes:.2f} minutes ago")
+                        
+                        # Check if we're still in cooldown period
+                        if elapsed_minutes < COOLDOWN_MINUTES:
+                            remaining_minutes = COOLDOWN_MINUTES - elapsed_minutes
+                            return True, remaining_minutes
+                except Exception as e:
+                    print(f"Error parsing cooldown file: {str(e)}")
+                    # If we can't parse the file, assume no cooldown
+    except Exception as e:
+        print(f"Error checking cooldown: {str(e)}")
+    
+    # If we reach here, no cooldown is active
+    return False, 0
+
+def update_cooldown_file():
+    """Update the cooldown file with the current usage time"""
+    cooldown_file = get_cooldown_file_path()
+    
+    try:
+        # Create or update the cooldown file
+        system_id = get_system_id()
+        current_time = time.time()
+        
+        # Format: system_id|timestamp
+        content = f"{system_id}|{current_time}"
+        
+        # Write to the file
+        with open(cooldown_file, 'w') as f:
+            f.write(content)
+        
+        # On Windows, try to make the file hidden
+        if platform.system() == 'Windows':
+            try:
+                subprocess.run(['attrib', '+h', cooldown_file], check=False)
+            except:
+                pass
+        
+        print(f"Cooldown file updated at {cooldown_file}")
+        return True
+    except Exception as e:
+        print(f"Error updating cooldown file: {str(e)}")
+        return False
 
 # Color theme - Discord inspired
 COLORS = {
@@ -426,6 +548,10 @@ class AuthenticationApp:
             self.login_status_var.set(message)
             self.authenticated = True
             
+            # Update the cooldown file to start the cooldown timer
+            print("Authentication successful, updating cooldown file")
+            update_cooldown_file()
+            
             # Wait a moment then start the main application
             self.root.after(1500, self.start_main_application)
         else:
@@ -606,7 +732,84 @@ else:
 def main(user_info=None):
     """Main entry point"""
     try:
-        # Create root window
+        # Check for cooldown
+        on_cooldown, remaining_minutes = is_on_cooldown()
+        if on_cooldown:
+            # Convert remaining minutes to minutes and seconds
+            remaining_mins = int(remaining_minutes)
+            remaining_secs = int((remaining_minutes - remaining_mins) * 60)
+            
+            # Create a simple window to show cooldown message
+            root = tk.Tk()
+            root.title("RuneSlayer - Cooldown Active")
+            root.geometry("450x200")
+            root.configure(bg=COLORS["background"])
+            root.resizable(False, False)
+            
+            # Center window
+            root.update_idletasks()
+            width = root.winfo_width()
+            height = root.winfo_height()
+            x = (root.winfo_screenwidth() // 2) - (width // 2)
+            y = (root.winfo_screenheight() // 2) - (height // 2)
+            root.geometry(f'{width}x{height}+{x}+{y}')
+            
+            # Message frame
+            msg_frame = tk.Frame(root, bg=COLORS["background"])
+            msg_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+            
+            # Icon/Warning
+            warning_label = tk.Label(
+                msg_frame,
+                text="⚠️",
+                font=("Arial", 28),
+                bg=COLORS["background"],
+                fg=COLORS["warning"]
+            )
+            warning_label.pack(pady=(0, 10))
+            
+            # Title
+            title_label = tk.Label(
+                msg_frame,
+                text="Cooldown Period Active",
+                font=("Arial", 16, "bold"),
+                bg=COLORS["background"],
+                fg=COLORS["text_bright"]
+            )
+            title_label.pack(pady=(0, 10))
+            
+            # Message
+            message = f"Please wait {remaining_mins} minutes and {remaining_secs} seconds before using RuneSlayer again."
+            message_label = tk.Label(
+                msg_frame,
+                text=message,
+                bg=COLORS["background"],
+                fg=COLORS["text"],
+                wraplength=350,
+                justify=tk.CENTER
+            )
+            message_label.pack(pady=(0, 15))
+            
+            # Close button
+            close_button = tk.Button(
+                msg_frame,
+                text="Close",
+                bg=COLORS["primary"],
+                fg=COLORS["text_bright"],
+                activebackground=COLORS["primary_hover"],
+                activeforeground=COLORS["text_bright"],
+                relief=tk.FLAT,
+                padx=20,
+                pady=5,
+                command=root.destroy
+            )
+            close_button.pack()
+            
+            # Start mainloop
+            root.mainloop()
+            return
+        
+        # Not on cooldown, create root window
         root = tk.Tk()
         
         # Create custom style for ttk widgets
@@ -616,9 +819,12 @@ def main(user_info=None):
         if user_info:
             # Skip auth and go straight to main app if user_info provided
             app = RuneSlayerTool(root, user_info)
+            # Update cooldown file upon successful authentication
+            update_cooldown_file()
         else:
             # Start with auth window if no user_info
             app = AuthenticationApp(root)
+            # Authentication process will call update_cooldown_file after success
         
         # Add handler for window close event to ensure cleanup occurs (if needed)
         if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
