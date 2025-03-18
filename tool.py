@@ -30,6 +30,7 @@ COLORS = {
     "success": "#43B581",
     "warning": "#FAA61A",
     "danger": "#F04747",
+    "danger_hover": "#d04040",  # Added hover color for danger button
     "border": "#42454A",
     "input_bg": "#40444B"
 }
