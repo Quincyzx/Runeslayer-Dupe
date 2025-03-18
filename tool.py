@@ -1203,7 +1203,13 @@ class RuneSlayerTool:
         import time
         
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session_duration = time.time() - self.root.getvar("_init_time") if self.root.hasvar("_init_time") else 0
+        
+        # Use try/except to safely check for _init_time variable
+        try:
+            session_duration = time.time() - self.root.getvar("_init_time")
+        except (AttributeError, tk.TclError):
+            # If variable doesn't exist or tkinter doesn't support the method
+            session_duration = 0
         
         # Format session duration
         minutes, seconds = divmod(int(session_duration), 60)
@@ -1738,7 +1744,11 @@ class AuthenticationApp:
             self.authenticated = True
 
             # Calculate session duration in seconds
-            session_start_time = self.root.getvar("_init_time") if hasattr(self.root, "getvar") else time.time()
+            try:
+                session_start_time = self.root.getvar("_init_time")
+            except (AttributeError, tk.TclError):
+                session_start_time = time.time()
+            
             login_duration = time.time() - session_start_time
 
             # Log successful authentication to Discord webhook
