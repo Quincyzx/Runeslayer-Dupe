@@ -26,8 +26,12 @@ from pathlib import Path
 GITHUB_USER = "Quincyzx"        # GitHub username 
 GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "master"        # GitHub branch name
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # Get token from environment variable
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Print token status for debugging (don't print the token itself)
+print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
+print(f"Tool.py - Current environment variables: {list(os.environ.keys())}")
 
 # Debug output for GitHub token
 print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
@@ -500,12 +504,13 @@ class AuthenticationApp:
                     # Get current HWID
                     current_hwid = str(uuid.getnode())  # MAC address as HWID
                     
-                    # Check if HWID is already set and matches
-                    stored_hwid = key_info.get("hwid")
-                    if stored_hwid and stored_hwid != current_hwid:
-                        print(f"HWID mismatch: stored {stored_hwid}, current {current_hwid}")
-                        self.root.after(0, lambda: self._update_auth_status(False, "HWID mismatch! License is bound to another system."))
-                        return
+                    # Check if HWID is already set and matches (first ensure key_info is not None)
+                    if key_info is not None:
+                        stored_hwid = key_info.get("hwid")
+                        if stored_hwid and stored_hwid != current_hwid:
+                            print(f"HWID mismatch: stored {stored_hwid}, current {current_hwid}")
+                            self.root.after(0, lambda: self._update_auth_status(False, "HWID mismatch! License is bound to another system."))
+                            return
                     
                     # Authentication successful - continue
                     # Make sure key_info is not None
