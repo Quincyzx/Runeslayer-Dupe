@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RuneSlayer Tool - Main Application
-This file should be hosted on GitHub and downloaded by the loader.
+This file handles authentication and provides the main tool functionality.
 """
 import os
 import sys
@@ -11,6 +11,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import random
+import requests
+import base64
+import uuid
 
 # Game titles
 GAMES = ["Elden Ring", "Dark Souls 3", "Skyrim", "Fallout 4", "The Witcher 3"]
@@ -1189,6 +1192,259 @@ class RuneSlayerTool:
             self.status_var.set("Stopping duplication process...")
             self.stop_btn.config(state=tk.DISABLED)
 
+# GitHub Configuration - Must match loader.py
+GITHUB_USER = "runeslayer"      # GitHub username 
+GITHUB_REPO = "runeslayer-tool" # GitHub repository name
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+KEYS_FILE_PATH = "keys.json"  # Path to keys file in GitHub repo
+
+class AuthenticationApp:
+    """Authentication window for RuneSlayer"""
+    def __init__(self, root):
+        self.root = root
+        self.root.title("RuneSlayer Authentication")
+        self.root.geometry("500x300")
+        self.root.minsize(500, 300)
+        self.root.configure(bg=COLORS["background"])
+        
+        # Center window
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Variables
+        self.auth_thread = None
+        self.authenticated = False
+        self.user_info = None
+        
+        # Setup UI
+        self.setup_login_ui()
+    
+    def setup_login_ui(self):
+        """Set up the login UI"""
+        # Main container
+        self.login_frame = tk.Frame(self.root, bg=COLORS["background"])
+        self.login_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        
+        # Title
+        title_label = tk.Label(
+            self.login_frame,
+            text="RuneSlayer",
+            font=("Arial", 24, "bold"),
+            bg=COLORS["background"],
+            fg=COLORS["text_bright"]
+        )
+        title_label.pack(pady=(0, 20))
+        
+        # Login container
+        login_container = tk.Frame(self.login_frame, bg=COLORS["background_secondary"], padx=30, pady=30)
+        login_container.pack()
+        
+        # Key input
+        key_label = tk.Label(
+            login_container,
+            text="License Key",
+            bg=COLORS["background_secondary"],
+            fg=COLORS["text"]
+        )
+        key_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        self.key_var = tk.StringVar()
+        # Pre-fill with a test key for development
+        self.key_var.set("RUNE-SLAYER-1234-ABCD-5678-EFGH-9012")
+        
+        key_entry = tk.Entry(
+            login_container,
+            textvariable=self.key_var,
+            width=35,
+            bg=COLORS["input_bg"],
+            fg=COLORS["text_bright"],
+            insertbackground=COLORS["text_bright"],
+            relief=tk.FLAT,
+            highlightbackground=COLORS["border"],
+            highlightthickness=1
+        )
+        key_entry.pack(pady=(0, 15))
+        
+        # Login button
+        self.login_button = tk.Button(
+            login_container,
+            text="Authenticate",
+            bg=COLORS["primary"],
+            fg=COLORS["text_bright"],
+            activebackground=COLORS["primary_hover"],
+            activeforeground=COLORS["text_bright"],
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            command=self.authenticate
+        )
+        self.login_button.pack(pady=(10, 0))
+        
+        # Status message
+        self.login_status_var = tk.StringVar()
+        self.login_status_label = tk.Label(
+            login_container,
+            textvariable=self.login_status_var,
+            bg=COLORS["background_secondary"],
+            fg=COLORS["danger"],
+            wraplength=300
+        )
+        self.login_status_label.pack(pady=(15, 0))
+    
+    def authenticate(self):
+        """Authenticate user with license key"""
+        license_key = self.key_var.get().strip()
+        
+        if not license_key:
+            self.login_status_var.set("Please enter a license key")
+            return
+        
+        # Show loading message
+        self.login_status_var.set("Authenticating...")
+        self.login_button.config(state=tk.DISABLED)
+        self.root.update()
+        
+        try:
+            # Create authentication thread
+            self.auth_thread = threading.Thread(target=self._authenticate_thread, args=(license_key,))
+            self.auth_thread.daemon = True
+            self.auth_thread.start()
+        except Exception as e:
+            self.login_status_var.set(f"Authentication error: {str(e)}")
+            self.login_button.config(state=tk.NORMAL)
+    
+    def _authenticate_thread(self, license_key):
+        """Authentication process in a separate thread"""
+        try:
+            # Download keys.json from GitHub
+            success, result = self.download_file_from_github(KEYS_FILE_PATH)
+            
+            if not success:
+                self.root.after(0, lambda: self._update_auth_status(False, f"Failed to download authentication data: {result}"))
+                return
+            
+            # Parse keys data
+            try:
+                keys_data = json.loads(result)
+            except json.JSONDecodeError:
+                self.root.after(0, lambda: self._update_auth_status(False, "Invalid authentication data format"))
+                return
+            
+            # Verify license key
+            valid_key = False
+            key_info = None
+            
+            for key_entry in keys_data.get("keys", []):
+                if key_entry.get("key") == license_key:
+                    # Check uses remaining
+                    uses_remaining = key_entry.get("uses_remaining", 0)
+                    if uses_remaining > 0:
+                        valid_key = True
+                        key_info = key_entry
+                        break
+                    else:
+                        self.root.after(0, lambda: self._update_auth_status(False, "License key has no uses remaining"))
+                        return
+            
+            if not valid_key:
+                self.root.after(0, lambda: self._update_auth_status(False, "Invalid license key"))
+                return
+            
+            # Check HWID (hardware ID)
+            # If HWID is empty, this is first use
+            # If HWID is set but doesn't match current machine, reject
+            current_hwid = str(uuid.getnode())  # MAC address as HWID
+            
+            if key_info and "hwid" in key_info:
+                stored_hwid = key_info.get("hwid", "")
+                if stored_hwid and stored_hwid != current_hwid:
+                    self.root.after(0, lambda: self._update_auth_status(False, "This license key is bound to another machine"))
+                    return
+            
+            # Authentication successful
+            # Store user info
+            self.user_info = {
+                "key": license_key,
+                "uses_remaining": key_info.get("uses_remaining", 0) if key_info else 0,
+                "hwid": current_hwid
+            }
+            
+            # In a real app we would update the HWID and decrement uses here
+            uses_remaining = self.user_info.get('uses_remaining', 0)
+            
+            self.root.after(0, lambda: self._update_auth_status(True, f"Authentication successful! Uses remaining: {uses_remaining}"))
+            
+        except Exception as e:
+            self.root.after(0, lambda: self._update_auth_status(False, f"Authentication error: {str(e)}"))
+    
+    def _update_auth_status(self, success, message):
+        """Update authentication status on the main thread"""
+        if success:
+            self.login_status_label.config(fg=COLORS["success"])
+            self.login_status_var.set(message)
+            self.authenticated = True
+            
+            # Wait a moment then start the main application
+            self.root.after(1500, self.start_main_application)
+        else:
+            self.login_status_label.config(fg=COLORS["danger"])
+            self.login_status_var.set(message)
+            self.login_button.config(state=tk.NORMAL)
+    
+    def start_main_application(self):
+        """Start the main application after successful authentication"""
+        # Destroy the login window
+        self.login_frame.destroy()
+        
+        # Create the main application with authenticated user info
+        app = RuneSlayerTool(self.root, self.user_info)
+    
+    def download_file_from_github(self, file_path):
+        """Download a file from GitHub"""
+        # Construct GitHub API URL
+        url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{file_path}"
+        
+        # Setup headers
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if GITHUB_TOKEN:
+            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+        
+        try:
+            # Make the request
+            response = requests.get(url, headers=headers)
+            
+            # Check for successful response
+            if response.status_code == 200:
+                # Parse the JSON response
+                data = response.json()
+                
+                # Make sure the content is of type "file"
+                if "type" not in data or data["type"] != "file":
+                    return False, "The specified path is not a file"
+                
+                # Decode the Base64 encoded content
+                content = base64.b64decode(data["content"])
+                
+                # Return content as string
+                return True, content.decode('utf-8')
+            else:
+                # Handle error response
+                error_message = f"Failed to download file. Status code: {response.status_code}"
+                try:
+                    error_message += f", Message: {response.json().get('message', '')}"
+                except:
+                    pass
+                return False, error_message
+        
+        except Exception as e:
+            # Handle exceptions
+            return False, f"An error occurred: {str(e)}"
+
+
 def main(user_info=None):
     """Main entry point"""
     try:
@@ -1205,8 +1461,13 @@ def main(user_info=None):
             troughcolor=COLORS["background_secondary"]
         )
         
-        # Create application
-        app = RuneSlayerTool(root, user_info)
+        # If user info is provided, skip authentication
+        if user_info is not None:
+            # Create application
+            app = RuneSlayerTool(root, user_info)
+        else:
+            # Create authentication app
+            auth_app = AuthenticationApp(root)
         
         # Start main loop
         root.mainloop()
