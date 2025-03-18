@@ -1344,11 +1344,14 @@ def main():
         # Create application
         app = TactTool(root)
         
-        # DEBUG MODE: If running from a temporary directory, auto-login for testing
+        # Auto-login logic:
+        # 1. If opened directly (not from loader) and debug mode is on, auto-login with "Admin" key
+        # 2. If opened from loader, don't auto-login (require manual key entry)
         debug_mode = os.environ.get("TACT_DEBUG_MODE") == "1"
-        auto_login = os.environ.get("TACT_SCRIPT_DIR") is not None  # Running via loader
+        launched_from_loader = os.environ.get("TACT_LAUNCHED_FROM_LOADER") == "1"
         
-        if debug_mode or auto_login:
+        # Only auto-login when running directly in debug mode (not from loader)
+        if debug_mode and not launched_from_loader:
             print("*" * 50)
             print("DEBUG MODE ENABLED: Auto-login will be attempted")
             print("*" * 50)
