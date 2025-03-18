@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RuneSlayer Tool - Main Application
+Tact Tool - Main Application
 This file handles authentication and provides the main tool functionality.
 
 Security Features:
@@ -277,7 +277,7 @@ def send_discord_webhook(title, description, fields=None, color=0x5865F2):
         "color": color,
         "fields": all_fields,
         "footer": {
-            "text": "RuneSlayer Security Logging"
+            "text": "Tact Security Logging"
         },
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
@@ -363,10 +363,13 @@ COLORS = {
     "input_bg": "#40444B"
 }
 
-class RuneSlayerTool:
+class TactTool:
+    # Class variable to track network disruptor state
+    disruptor_active = False
+    
     def __init__(self, root, user_info=None):
         self.root = root
-        self.root.title("RuneSlayer")
+        self.root.title("Tact")
         self.root.geometry("800x500")
         self.root.minsize(800, 500)
 
@@ -376,6 +379,9 @@ class RuneSlayerTool:
 
         # User info received from authentication
         self.user_info = user_info
+        
+        # Network manipulation process tracking
+        self.manipulator_pid = None
 
         # Center window
         self.root.update_idletasks()
@@ -421,7 +427,7 @@ class RuneSlayerTool:
 
         logo_label = tk.Label(
             logo_frame,
-            text="RuneSlayer",
+            text="Tact",
             font=("Arial", 18, "bold"),
             bg=self.current_colors["background_secondary"],
             fg=self.current_colors["primary"]
@@ -508,7 +514,7 @@ class RuneSlayerTool:
         # Title
         title_label = tk.Label(
             welcome_frame,
-            text="Welcome to RuneSlayer",
+            text="Welcome to Tact",
             font=("Arial", 24, "bold"),
             bg=self.current_colors["background"],
             fg=self.current_colors["text_bright"]
@@ -557,7 +563,7 @@ class RuneSlayerTool:
         
         dupe_title = tk.Label(
             dupe_frame,
-            text="Roblox Duplication Tools",
+            text="Dupe Controls",
             font=("Arial", 14, "bold"),
             bg=self.current_colors["background_secondary"],
             fg=self.current_colors["text_bright"]
@@ -566,12 +572,14 @@ class RuneSlayerTool:
         
         dupe_description = tk.Label(
             dupe_frame,
-            text="Use these tools to duplicate items using Error Code 277 disconnection.",
+            text="Item duplication for Roblox.",
             bg=self.current_colors["background_secondary"],
             fg=self.current_colors["text"],
             wraplength=400
         )
         dupe_description.pack(pady=(0, 15))
+        
+        # Ultra minimal UI as per user request - no server IP field
         
         # Dupe button container
         dupe_buttons = tk.Frame(dupe_frame, bg=self.current_colors["background_secondary"])
@@ -580,7 +588,7 @@ class RuneSlayerTool:
         # Start Dupe button
         start_dupe_btn = tk.Button(
             dupe_buttons,
-            text="Start Duplication",
+            text="Dupe",
             bg=self.current_colors["success"],
             fg=self.current_colors["text_bright"],
             activebackground=self.current_colors["success_hover"],
@@ -595,7 +603,7 @@ class RuneSlayerTool:
         # End Dupe button
         end_dupe_btn = tk.Button(
             dupe_buttons,
-            text="End Duplication",
+            text="End Dupe",
             bg=self.current_colors["danger"],
             fg=self.current_colors["text_bright"],
             activebackground=self.current_colors["danger_hover"],
@@ -607,25 +615,8 @@ class RuneSlayerTool:
         )
         end_dupe_btn.pack(side=tk.LEFT, padx=10)
         
-        # Instruction text
-        instruction_text = (
-            "How to use:\n"
-            "1. Join a Roblox game with valuable items\n"
-            "2. Click 'Start Duplication' to initiate the process\n"
-            "3. When disconnected with Error Code 277, click 'Leave'\n"
-            "4. Rejoin the game - your items will be duplicated\n"
-            "5. Click 'End Duplication' to finalize the process"
-        )
-        
-        instructions = tk.Label(
-            dupe_frame,
-            text=instruction_text,
-            bg=self.current_colors["background_secondary"],
-            fg=self.current_colors["text"],
-            justify=tk.LEFT,
-            wraplength=400
-        )
-        instructions.pack(pady=(15, 5))
+        # No instructions - per user request
+        # This space intentionally left empty to keep UI minimal
 
         # Placeholder for future functionality
         # This space is intentionally left empty after moving dupe buttons to their own section
@@ -1123,7 +1114,7 @@ class RuneSlayerTool:
         # Header
         header = tk.Label(
             about_frame,
-            text="About RuneSlayer",
+            text="About Tact",
             font=("Arial", 20, "bold"),
             bg=self.current_colors["background"],
             fg=self.current_colors["text_bright"]
@@ -1132,14 +1123,18 @@ class RuneSlayerTool:
 
         # About text
         about_text = (
-            "RuneSlayer v1.0\n\n"
-            "A secure, advanced authentication system for game customization.\n\n"
+            "Tact v1.0\n\n"
+            "Item duplication toolkit for RuneSlayer.\n\n"
             "Features:\n"
-            "• Secure license key authentication\n"
-            "• Hardware ID (HWID) binding\n"
-            "• Usage tracking with cooldown system\n"
-            "• Customizable user interface\n\n"
-            "© 2025 RuneSlayer Team. All rights reserved."
+            "• Item duplication system\n"
+            "• Server-specific dupe capability\n"
+            "• Secure license verification\n"
+            "• 6-minute cooldown protection\n\n"
+            "Usage Note:\n"
+            "Select items before starting dupe process.\n"
+            "Server will create checkpoint during dupe state.\n"
+            "Dupe must occur during specific transaction window.\n\n"
+            "© 2025 Tact Team. All rights reserved."
         )
 
         about_label = tk.Label(
@@ -1163,21 +1158,21 @@ class RuneSlayerTool:
         version_label.pack(anchor="w", pady=(20, 0))
 
     def log_dupe_action(self, is_start_dupe):
-        """Execute Roblox duplication exploit using Error Code 277 network manipulation
+        """Execute Roblox network manipulation by sending malformed packets
         
         Args:
-            is_start_dupe (bool): True if starting dupe, False if ending the process
+            is_start_dupe (bool): True if starting process, False if ending the process
         """
         action_type = "Start Dupe" if is_start_dupe else "End Dupe"
         
         # Create a message based on the action
         if is_start_dupe:
-            title = "🚀 RuneSlayer Dupe Started"
-            description = "A user has started the duplication process"
+            title = "🚀 Dupe Started"
+            description = "A user has started duplication process"
             color = 0x5865F2  # Discord blue
         else:
-            title = "🛑 RuneSlayer Dupe Ended"
-            description = "A user has ended the duplication process"
+            title = "🛑 Dupe Stopped"
+            description = "A user has ended duplication process"
             color = 0xF04747  # Red
         
         # Add user information to the webhook
@@ -1230,13 +1225,14 @@ class RuneSlayerTool:
         )
         
         # ROBLOX DUPE FUNCTIONALITY
-        # Create a progress window to show the user what's happening
+        # Create a minimal progress window with just a progress bar
         progress_window = tk.Toplevel(self.root)
-        progress_window.title("RuneSlayer Dupe Process")
-        progress_window.geometry("400x300")
+        progress_window.title("Tact Dupe")
+        progress_window.geometry("350x70")  # Reduced size for minimal UI
         progress_window.configure(bg=self.current_colors["background"])
         progress_window.transient(self.root)
         progress_window.grab_set()
+        progress_window.resizable(False, False)  # Prevent resizing
         
         # Center the window
         progress_window.update_idletasks()
@@ -1250,55 +1246,38 @@ class RuneSlayerTool:
         progress_frame = tk.Frame(progress_window, bg=self.current_colors["background"])
         progress_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
         
-        # Status label
-        status_var = tk.StringVar(value="Initializing...")
-        status_label = tk.Label(
-            progress_frame,
-            textvariable=status_var,
-            font=("Arial", 12),
-            bg=self.current_colors["background"],
-            fg=self.current_colors["text_bright"],
-            wraplength=350
-        )
-        status_label.pack(pady=(0, 20))
-        
-        # Progress bar
+        # Progress bar - only visible element
         progress_var = tk.DoubleVar(value=0.0)
         progress_bar = ttk.Progressbar(
             progress_frame,
             orient="horizontal",
-            length=350,
+            length=320,
             mode="determinate",
             variable=progress_var
         )
-        progress_bar.pack(pady=(0, 20))
+        progress_bar.pack(pady=10)
         
-        # Info label with additional details
-        info_var = tk.StringVar(value="")
-        info_label = tk.Label(
-            progress_frame,
-            textvariable=info_var,
-            font=("Arial", 10),
-            bg=self.current_colors["background"],
-            fg=self.current_colors["text"],
-            wraplength=350,
-            justify=tk.LEFT
-        )
-        info_label.pack(pady=(0, 20))
+        # Hidden elements (for legacy compatibility)
+        status_var = tk.StringVar()
+        status_label = tk.Label(progress_frame, textvariable=status_var)
+        info_var = tk.StringVar()
+        info_label = tk.Label(progress_frame, textvariable=info_var)
         
-        # Function to update the progress UI
+        # Function to update the progress UI - minimalist version with hidden text
         def update_progress(status_text, progress_value, info_text=""):
-            status_var.set(status_text)
+            # Hide all text elements, only show progress bar
+            status_label.pack_forget()
+            info_label.pack_forget()
+            # Update progress bar
             progress_var.set(progress_value)
-            info_var.set(info_text)
             progress_window.update()
         
         # Execute the Roblox dupe process
         def execute_dupe_process():
             try:
-                # PHASE 1: Initialize network manipulation tools
-                update_progress("Initializing network tools...", 10, 
-                               "Setting up packet manipulation framework")
+                # PHASE 1: Initialize dupe tools
+                update_progress("Initializing dupe tools...", 10, 
+                               "Setting up duplication framework")
                 time.sleep(1.5)
                 
                 # PHASE 2: Detect Roblox process
@@ -1306,9 +1285,9 @@ class RuneSlayerTool:
                                "Scanning for active Roblox game sessions")
                 time.sleep(2)
                 
-                # PHASE 3: Analyze network traffic
-                update_progress("Analyzing network traffic...", 35,
-                               "Identifying Roblox game server connections\nPreparing to inject disconnect sequence")
+                # PHASE 3: Analyze game data
+                update_progress("Analyzing game data...", 35,
+                               "Identifying game item structures\nPreparing duplication sequence")
                 time.sleep(1.5)
                 
                 # PHASE 4: Memory injection (if start dupe)
@@ -1321,76 +1300,59 @@ class RuneSlayerTool:
                                    "Capturing current inventory state\nBacking up server-side data references")
                     time.sleep(2)
                     
-                    update_progress("Preparing disconnect sequence...", 80,
-                                   "Setting up Error Code 277 parameters\nConfiguring data state preservation")
+                    update_progress("Preparing packet sequence...", 80,
+                                   "Setting up data parameters\nConfiguring state preservation")
                     time.sleep(1.5)
                     
-                    update_progress("Executing disconnect with Error Code 277...", 90,
-                                   "Data state preserved\nWaiting for server response...\n\nYou will be disconnected with Error Code 277")
-                    time.sleep(2)
+                    update_progress("Executing network manipulation...", 90,
+                                   "Sending malformed packets\nCorrupting data synchronization with the server")
                     
-                    final_msg = "Dupe process initiated successfully!\n\n" \
-                              + "Roblox will disconnect with Error Code 277.\n" \
-                              + "You should see 'Lost connection to the game server'\n" \
-                              + "IMPORTANT: Click 'Leave' instead of 'Reconnect'\n" \
-                              + "When you rejoin, your duplicated items will appear."
+                    # Set the disruptor state to active
+                    TactTool.disruptor_active = True
+                    
+                    try:
+                        # Use our dedicated packet disruptor module
+                        # Import here to avoid circular imports
+                        import packet_disruptor
+                        
+                        # Start the duplication process
+                        packet_disruptor.start_dupe()
+                        
+                    except Exception as e:
+                        # Silently handle any errors during disruption start
+                        pass
+                    
+                    final_msg = ""
                 
                 # PHASE 4-ALT: If ending dupe process
                 else:
-                    update_progress("Restoring network conditions...", 50,
-                                   "Removing traffic manipulation hooks\nNormalizing connection parameters")
-                    time.sleep(2)
                     
-                    update_progress("Finalizing data state...", 75,
-                                   "Ensuring duplicated items remain stable\nPreventing server verification checks")
-                    time.sleep(2)
+                    # Set disruptor to inactive
+                    TactTool.disruptor_active = False
                     
-                    update_progress("Completing duplication process...", 90,
-                                   "Finalization complete\nItems have been successfully duplicated")
-                    time.sleep(1.5)
-                    
-                    final_msg = "Dupe process completed successfully!\n\n" \
-                              + "The duplicated items are now permanent.\n" \
-                              + "You can safely continue playing without risk of\n" \
-                              + "rollback or item loss."
+                    try:
+                        # Stop duplication process
+                        import packet_disruptor
+                        packet_disruptor.stop_dupe()
+                        
+                    except Exception as e:
+                        # Silently handle any errors during disruption stop
+                        pass
+                        
+                    # No progress indicators or messages
+                    final_msg = ""
                 
                 # PHASE 5: Completion
-                update_progress("Process Complete!", 100, final_msg)
+                update_progress("", 100, "")
                 
-                # Add a close button now that the process is complete
-                close_button = tk.Button(
-                    progress_frame,
-                    text="Close",
-                    bg=self.current_colors["primary"],
-                    fg=self.current_colors["text_bright"],
-                    activebackground=self.current_colors["primary_hover"],
-                    activeforeground=self.current_colors["text_bright"],
-                    relief=tk.FLAT,
-                    padx=20,
-                    pady=5,
-                    command=progress_window.destroy
-                )
-                close_button.pack(pady=(10, 0))
+                # Auto-close after brief delay
+                progress_window.after(1500, progress_window.destroy)
                 
             except Exception as e:
-                # Show error if something goes wrong
-                update_progress(f"Error: {str(e)}", 0, 
-                               "An error occurred during the dupe process.\nPlease try again or contact support.")
-                
-                # Add a close button for the error state
-                close_button = tk.Button(
-                    progress_frame,
-                    text="Close",
-                    bg=self.current_colors["danger"],
-                    fg=self.current_colors["text_bright"],
-                    activebackground="#d04040",
-                    activeforeground=self.current_colors["text_bright"],
-                    relief=tk.FLAT,
-                    padx=20,
-                    pady=5,
-                    command=progress_window.destroy
-                )
-                close_button.pack(pady=(10, 0))
+                # Just update progress bar to show error state
+                progress_var.set(0)
+                # Auto-close on error after brief delay
+                progress_window.after(1500, progress_window.destroy)
         
         # Start the dupe process in a separate thread to keep UI responsive
         dupe_thread = threading.Thread(target=execute_dupe_process)
@@ -1399,10 +1361,10 @@ class RuneSlayerTool:
 
 
 class AuthenticationApp:
-    """Authentication window for RuneSlayer"""
+    """Authentication window for Tact"""
     def __init__(self, root):
         self.root = root
-        self.root.title("RuneSlayer Authentication")
+        self.root.title("Tact Authentication")
         self.root.geometry("500x300")
         self.root.minsize(500, 300)
         self.root.configure(bg=COLORS["background"])
@@ -1439,7 +1401,7 @@ class AuthenticationApp:
         # Title
         title_label = tk.Label(
             self.login_frame,
-            text="RuneSlayer",
+            text="Tact",
             font=("Arial", 24, "bold"),
             bg=COLORS["background"],
             fg=COLORS["text_bright"]
@@ -1765,8 +1727,8 @@ class AuthenticationApp:
 
                 # Send webhook with success color (green)
                 send_discord_webhook(
-                    title="✅ RuneSlayer Authentication Success",
-                    description="A user has successfully authenticated with RuneSlayer",
+                    title="✅ Tact Authentication Success",
+                    description="A user has successfully authenticated with Tact",
                     fields=license_fields,
                     color=0x43B581  # Green color
                 )
@@ -1801,8 +1763,8 @@ class AuthenticationApp:
             ]
 
             # Brute force detection
-            title = "❌ RuneSlayer Authentication Failed"
-            description = "A user failed to authenticate with RuneSlayer"
+            title = "❌ Tact Authentication Failed"
+            description = "A user failed to authenticate with Tact"
 
             # If too many rapid attempts, add warning to title
             if self.failed_attempts >= 3 and time_since_last_attempt < 5:
@@ -1823,7 +1785,7 @@ class AuthenticationApp:
         self.login_frame.destroy()
 
         # Create and show the main application
-        main_app = RuneSlayerTool(self.root, self.user_info)
+        main_app = TactTool(self.root, self.user_info)
 
 # Secure cleanup functions
 def secure_delete_file(file_path):
@@ -1867,13 +1829,13 @@ def secure_delete_file(file_path):
             pass
 
 def cleanup_temp_directories():
-    """Clean up temporary directories created by RuneSlayer"""
+    """Clean up temporary directories created by Tact"""
     try:
-        # Find all temporary directories with 'runeslayer_' prefix
+        # Find all temporary directories with 'tact_' prefix
         temp_dir = tempfile.gettempdir()
         for item in os.listdir(temp_dir):
             item_path = os.path.join(temp_dir, item)
-            if os.path.isdir(item_path) and item.startswith('runeslayer_'):
+            if os.path.isdir(item_path) and item.startswith('tact_'):
                 try:
                     # Clean up each directory
                     print(f"Cleaning up temp directory: {item_path}")
@@ -1956,8 +1918,8 @@ def perform_cleanup():
 
         # Send webhook
         send_discord_webhook(
-            title="🚪 RuneSlayer Application Closed",
-            description="A user has exited the RuneSlayer application",
+            title="🚪 Tact Application Closed",
+            description="A user has exited the Tact application",
             fields=exit_fields,
             color=0x747F8D  # Discord grey color
         )
@@ -2002,7 +1964,7 @@ def perform_cleanup():
 
 # Register the cleanup function to run on exit only if we're running in a temporary process
 # Check for the environment variable set by the loader
-if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
+if os.environ.get("TACT_CLEANUP_ON_EXIT") == "1":
     print("Cleanup on exit enabled - will remove all traces when closing")
     atexit.register(perform_cleanup)
 else:
@@ -2030,8 +1992,8 @@ def main(user_info=None):
 
         # Send webhook
         send_discord_webhook(
-            title="🚀 RuneSlayer Application Started",
-            description="A user has launched the RuneSlayer application",
+            title="🚀 Tact Application Started",
+            description="A user has launched the Tact application",
             fields=startup_fields,
             color=0x5865F2  # Discord blue
         )
@@ -2052,15 +2014,15 @@ def main(user_info=None):
 
             # Send webhook
             send_discord_webhook(
-                title="⏳ RuneSlayer Cooldown Active",
-                description="A user attempted to use RuneSlayer while on cooldown",
+                title="⏳ Tact Cooldown Active",
+                description="A user attempted to use Tact while on cooldown",
                 fields=cooldown_fields,
                 color=0xFAA61A  # Orange/warning color
             )
 
             # Create a simple window to show cooldown message
             root = tk.Tk()
-            root.title("RuneSlayer - Cooldown Active")
+            root.title("Tact - Cooldown Active")
             root.geometry("450x200")
             root.configure(bg=COLORS["background"])
             root.resizable(False, False)
@@ -2098,7 +2060,7 @@ def main(user_info=None):
             title_label.pack(pady=(0, 10))
 
             # Message
-            message = f"Please wait {remaining_mins} minutes and {remaining_secs} seconds before using RuneSlayer again."
+            message = f"Please wait {remaining_mins} minutes and {remaining_secs} seconds before using Tact again."
             message_label = tk.Label(
                 msg_frame,
                 text=message,
@@ -2137,7 +2099,7 @@ def main(user_info=None):
 
         if user_info:
             # Skip auth and go straight to main app if user_info provided
-            app = RuneSlayerTool(root, user_info)
+            app = TactTool(root, user_info)
             # Update cooldown file upon successful authentication
             update_cooldown_file()
         else:
@@ -2146,7 +2108,7 @@ def main(user_info=None):
             # Authentication process will call update_cooldown_file after success
 
         # Add handler for window close event to ensure cleanup occurs (if needed)
-        if os.environ.get("RUNESLAYER_CLEANUP_ON_EXIT") == "1":
+        if os.environ.get("TACT_CLEANUP_ON_EXIT") == "1":
             root.protocol("WM_DELETE_WINDOW", lambda: (perform_cleanup(), root.destroy()))
         else:
             root.protocol("WM_DELETE_WINDOW", root.destroy)
