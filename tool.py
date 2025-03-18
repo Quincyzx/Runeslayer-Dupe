@@ -2,6 +2,23 @@
 """
 RuneSlayer Tool - Main Application
 This file handles authentication and provides the main tool functionality.
+
+Security Features:
+- License key authentication with GitHub-based verification
+- Hardware ID (HWID) binding to prevent license sharing
+- Usage cooldown system (6-minute timeout between sessions)
+- Secure file deletion with data overwriting
+- Comprehensive Discord webhook logging system
+
+Webhook Logging System:
+- Authentication events (success/failure)
+- Application startup and exit
+- Cooldown enforcement events
+- Dupe action tracking (start/stop)
+- User profile and system information
+- Theme customization tracking
+
+All events include detailed system information for security monitoring.
 """
 import os
 import json
@@ -20,6 +37,8 @@ import time
 import datetime
 import platform
 import hashlib
+import getpass
+import socket
 from pathlib import Path
 
 # GitHub Configuration
@@ -27,6 +46,9 @@ GITHUB_USER = "Quincyzx"        # GitHub username
 GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "master"        # GitHub branch name
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
+
+# Discord Webhook Configuration for logging
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1346526411586015242/x59HoBMu15OZhrdCnaNotDfxN2p7xJyIQUd2jHCebU_EPUsX8_9UTJARim2wSfe8QzhX"
 
 # Get GitHub token from environment variable passed by the loader
 # This avoids hardcoding tokens in the tool.py file that could be detected by GitHub scanners
@@ -42,6 +64,80 @@ print(f"Tool.py - Current environment variables: {list(os.environ.keys())}")
 
 # Cooldown configuration
 COOLDOWN_MINUTES = 6  # 6 minute cooldown period
+
+def get_ip_address():
+    """Get the public IP address of the current system"""
+    try:
+        # Use a public IP detection service
+        response = requests.get('https://api.ipify.org?format=json', timeout=5)
+        if response.status_code == 200:
+            return response.json().get('ip', 'Unknown')
+        
+        # Fallback to another service if first one fails
+        response = requests.get('https://ifconfig.me/ip', timeout=5)
+        if response.status_code == 200:
+            return response.text.strip()
+        
+        return "IP detection failed"
+    except Exception as e:
+        print(f"Error getting IP address: {str(e)}")
+        return "IP detection error"
+
+def get_system_info():
+    """Get detailed system information summary"""
+    try:
+        # Gather system details
+        os_info = f"{platform.system()} {platform.release()}"
+        python_ver = platform.python_version()
+        cpu_info = platform.processor() or "Unknown CPU"
+        
+        # Get RAM info if possible
+        ram_info = "Unknown RAM"
+        try:
+            if platform.system() == 'Windows':
+                import ctypes
+                kernel32 = ctypes.windll.kernel32
+                c_ulonglong = ctypes.c_ulonglong
+                class MEMORYSTATUSEX(ctypes.Structure):
+                    _fields_ = [
+                        ('dwLength', ctypes.c_ulong),
+                        ('dwMemoryLoad', ctypes.c_ulong),
+                        ('ullTotalPhys', c_ulonglong),
+                        ('ullAvailPhys', c_ulonglong),
+                        ('ullTotalPageFile', c_ulonglong),
+                        ('ullAvailPageFile', c_ulonglong),
+                        ('ullTotalVirtual', c_ulonglong),
+                        ('ullAvailVirtual', c_ulonglong),
+                        ('ullExtendedVirtual', c_ulonglong),
+                    ]
+                memory_status = MEMORYSTATUSEX()
+                memory_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+                kernel32.GlobalMemoryStatusEx(ctypes.byref(memory_status))
+                ram_gb = memory_status.ullTotalPhys / (1024**3)
+                ram_info = f"{ram_gb:.2f} GB RAM"
+            elif platform.system() == 'Linux':
+                with open('/proc/meminfo', 'r') as f:
+                    for line in f:
+                        if line.startswith('MemTotal:'):
+                            ram_kb = int(line.split()[1])
+                            ram_gb = ram_kb / (1024**2)
+                            ram_info = f"{ram_gb:.2f} GB RAM"
+                            break
+            elif platform.system() == 'Darwin':  # macOS
+                import subprocess
+                result = subprocess.run(['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    ram_bytes = int(result.stdout.strip())
+                    ram_gb = ram_bytes / (1024**3)
+                    ram_info = f"{ram_gb:.2f} GB RAM"
+        except Exception as e:
+            print(f"Error getting RAM info: {str(e)}")
+        
+        # Format the complete system info string
+        return f"{os_info} | {python_ver} | {cpu_info} | {ram_info}"
+    except Exception as e:
+        print(f"Error getting system info: {str(e)}")
+        return "System info detection error"
 
 def get_system_id():
     """Get a unique system identifier based on hardware"""
@@ -127,6 +223,86 @@ def is_on_cooldown():
     
     # If we reach here, no cooldown is active
     return False, 0
+
+def send_discord_webhook(title, description, fields=None, color=0x5865F2):
+    """Send a message to Discord webhook with user information and actions
+    
+    Args:
+        title (str): Title of the embed
+        description (str): Description of the embed
+        fields (list): List of dictionaries with name and value keys for embed fields
+        color (int): Color of the embed in decimal format
+    """
+    if not fields:
+        fields = []
+    
+    # Get system information
+    try:
+        # Use our advanced system info collector
+        ip_address = get_ip_address()
+        system_info = get_system_info()
+        hostname = platform.node()
+        os_name = f"{platform.system()} {platform.release()}"
+        username = getpass.getuser()
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hwid = get_system_id()
+    except Exception as e:
+        print(f"Error getting system info for webhook: {str(e)}")
+        # Fallbacks if we can't get system info
+        ip_address = "Unknown"
+        system_info = "Unknown"
+        hostname = "Unknown"
+        os_name = "Unknown"
+        username = "Unknown"
+        current_time = "Unknown"
+        hwid = "Unknown"
+    
+    # Add system info fields
+    system_fields = [
+        {"name": "IP Address", "value": ip_address, "inline": True},
+        {"name": "Hostname", "value": hostname, "inline": True},
+        {"name": "Username", "value": username, "inline": True},
+        {"name": "Time", "value": current_time, "inline": True},
+        {"name": "HWID", "value": hwid[:16] + "...", "inline": True},
+        {"name": "System Details", "value": system_info, "inline": False}
+    ]
+    
+    # Combine custom fields with system fields
+    all_fields = fields + system_fields
+    
+    # Create the embed payload
+    embed = {
+        "title": title,
+        "description": description,
+        "color": color,
+        "fields": all_fields,
+        "footer": {
+            "text": "RuneSlayer Security Logging"
+        },
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+    
+    payload = {
+        "embeds": [embed]
+    }
+    
+    # Send the webhook
+    try:
+        response = requests.post(
+            DISCORD_WEBHOOK_URL,
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code == 204:
+            print("Discord webhook sent successfully")
+            return True
+        else:
+            print(f"Discord webhook failed with status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print(f"Error sending Discord webhook: {str(e)}")
+        return False
 
 def update_cooldown_file():
     """Update the cooldown file with the current usage time"""
@@ -386,8 +562,8 @@ class RuneSlayerTool:
             padx=20,
             pady=10,
             width=12,
-            # This button doesn't do anything yet
-            command=lambda: None
+            # Log when button is clicked
+            command=lambda: self.log_dupe_action(True)
         )
         dupe_btn.pack(side="left", padx=(0, 15))
         
@@ -404,8 +580,8 @@ class RuneSlayerTool:
             padx=20,
             pady=10,
             width=12,
-            # This button doesn't do anything yet
-            command=lambda: None
+            # Log when button is clicked
+            command=lambda: self.log_dupe_action(False)
         )
         end_dupe_btn.pack(side="left")
     
@@ -940,6 +1116,73 @@ class RuneSlayerTool:
             fg=self.current_colors["text_muted"]
         )
         version_label.pack(anchor="w", pady=(20, 0))
+    
+    def log_dupe_action(self, is_start_dupe):
+        """Log dupe button actions to Discord webhook
+        
+        Args:
+            is_start_dupe (bool): True if starting dupe, False if ending
+        """
+        action_type = "Start Dupe" if is_start_dupe else "End Dupe"
+        
+        # Create a message based on the action
+        if is_start_dupe:
+            title = "🚀 RuneSlayer Dupe Started"
+            description = "A user has started the duplication process"
+            color = 0x5865F2  # Discord blue
+        else:
+            title = "🛑 RuneSlayer Dupe Ended"
+            description = "A user has ended the duplication process"
+            color = 0xF04747  # Red
+        
+        # Add user information to the webhook
+        fields = [
+            {"name": "Action", "value": action_type, "inline": True},
+            {"name": "Event Type", "value": "User Activity", "inline": True}
+        ]
+        
+        # Add user info if available
+        if hasattr(self, 'user_info') and self.user_info:
+            # Format license key for display (partial masking for security)
+            key = self.user_info.get('key', 'Unknown')
+            masked_key = key[:8] + "****" + key[-4:] if len(key) > 12 else key
+            
+            fields.extend([
+                {"name": "License Key", "value": masked_key, "inline": True},
+                {"name": "Uses Remaining", "value": str(self.user_info.get('uses_remaining', 0)), "inline": True},
+                {"name": "HWID", "value": self.user_info.get('hwid', 'Unknown')[:16] + "...", "inline": False}
+            ])
+        
+        # Add session information
+        import datetime
+        import time
+        
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session_duration = time.time() - self.root.getvar("_init_time") if self.root.hasvar("_init_time") else 0
+        
+        # Format session duration
+        minutes, seconds = divmod(int(session_duration), 60)
+        hours, minutes = divmod(minutes, 60)
+        session_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
+        
+        fields.extend([
+            {"name": "Timestamp", "value": current_time, "inline": True},
+            {"name": "Session Duration", "value": session_str, "inline": True}
+        ])
+        
+        # Send the webhook
+        send_discord_webhook(
+            title=title,
+            description=description,
+            fields=fields,
+            color=color
+        )
+        
+        # Show a message to the user in the UI (placeholder for future functionality)
+        messagebox.showinfo(
+            "RuneSlayer", 
+            f"{action_type} action logged. Full functionality coming soon."
+        )
 
 
 class AuthenticationApp:
@@ -963,6 +1206,13 @@ class AuthenticationApp:
         self.auth_thread = None
         self.authenticated = False
         self.user_info = None
+        
+        # Security tracking 
+        self.failed_attempts = 0
+        self.last_attempt_time = time.time()
+        
+        # Store initialization time for session tracking
+        self.root.setvar("_init_time", time.time())
         
         # Setup UI
         self.setup_login_ui()
@@ -998,7 +1248,7 @@ class AuthenticationApp:
         
         self.key_var = tk.StringVar()
         
-        key_entry = tk.Entry(
+        self.license_entry = tk.Entry(
             login_container,
             textvariable=self.key_var,
             width=35,
@@ -1009,7 +1259,7 @@ class AuthenticationApp:
             highlightbackground=COLORS["border"],
             highlightthickness=1
         )
-        key_entry.pack(pady=(0, 15))
+        self.license_entry.pack(pady=(0, 15))
         
         # Login button
         self.login_button = tk.Button(
@@ -1273,9 +1523,36 @@ class AuthenticationApp:
     def _update_auth_status(self, success, message):
         """Update authentication status on the main thread"""
         if success:
+            # Reset failed attempts counter on successful login
+            self.failed_attempts = 0
+            
             self.login_status_label.config(fg=COLORS["success"])
             self.login_status_var.set(message)
             self.authenticated = True
+            
+            # Calculate session duration in seconds
+            session_start_time = self.root.getvar("_init_time") if hasattr(self.root, "getvar") else time.time()
+            login_duration = time.time() - session_start_time
+            
+            # Log successful authentication to Discord webhook
+            if hasattr(self, 'user_info') and self.user_info:
+                # Create fields with license info
+                license_fields = [
+                    {"name": "License Key", "value": self.user_info.get('key', 'Unknown'), "inline": False},
+                    {"name": "Uses Remaining", "value": str(self.user_info.get('uses_remaining', 0)), "inline": True},
+                    {"name": "HWID", "value": self.user_info.get('hwid', 'Unknown'), "inline": True},
+                    {"name": "Login Time", "value": f"{login_duration:.2f} seconds", "inline": True},
+                    {"name": "IP Address", "value": get_ip_address(), "inline": True},
+                    {"name": "System Info", "value": get_system_info(), "inline": False}
+                ]
+                
+                # Send webhook with success color (green)
+                send_discord_webhook(
+                    title="✅ RuneSlayer Authentication Success",
+                    description="A user has successfully authenticated with RuneSlayer",
+                    fields=license_fields,
+                    color=0x43B581  # Green color
+                )
             
             # Update the cooldown file to start the cooldown timer
             print("Authentication successful, updating cooldown file")
@@ -1284,9 +1561,44 @@ class AuthenticationApp:
             # Wait a moment then start the main application
             self.root.after(1500, self.start_main_application)
         else:
+            # Increment failed attempts counter
+            self.failed_attempts += 1
+            
+            # Track timing between attempts for brute force detection
+            current_time = time.time()
+            time_since_last_attempt = current_time - self.last_attempt_time
+            self.last_attempt_time = current_time
+            
             self.login_status_label.config(fg=COLORS["danger"])
             self.login_status_var.set(message)
             self.login_button.config(state=tk.NORMAL)
+            
+            # Log failed authentication to Discord webhook
+            failed_fields = [
+                {"name": "Attempted Key", "value": self.license_entry.get() if hasattr(self, 'license_entry') else "Unknown", "inline": False},
+                {"name": "Error Message", "value": message, "inline": False},
+                {"name": "Failed Attempts", "value": str(self.failed_attempts), "inline": True},
+                {"name": "Time Since Last Attempt", "value": f"{time_since_last_attempt:.2f} seconds", "inline": True},
+                {"name": "IP Address", "value": get_ip_address(), "inline": True},
+                {"name": "System Info", "value": get_system_info(), "inline": False}
+            ]
+            
+            # Brute force detection
+            title = "❌ RuneSlayer Authentication Failed"
+            description = "A user failed to authenticate with RuneSlayer"
+            
+            # If too many rapid attempts, add warning to title
+            if self.failed_attempts >= 3 and time_since_last_attempt < 5:
+                title = "⚠️ POTENTIAL BRUTE FORCE ATTEMPT ⚠️"
+                description = f"Suspicious login activity detected! {self.failed_attempts} failed attempts in quick succession."
+            
+            # Send webhook with error color (red)
+            send_discord_webhook(
+                title=title,
+                description=description,
+                fields=failed_fields,
+                color=0xF04747  # Red color
+            )
     
     def start_main_application(self):
         """Start the main application after successful authentication"""
@@ -1414,6 +1726,27 @@ def perform_cleanup():
     """Perform all cleanup operations"""
     print("Starting secure cleanup...")
     
+    # Log application exit to Discord webhook
+    try:
+        import datetime
+        import platform
+        
+        exit_fields = [
+            {"name": "Event Type", "value": "Application Exit", "inline": True},
+            {"name": "Exit Time", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "inline": True},
+            {"name": "Operating System", "value": f"{platform.system()} {platform.release()}", "inline": True}
+        ]
+        
+        # Send webhook
+        send_discord_webhook(
+            title="🚪 RuneSlayer Application Closed",
+            description="A user has exited the RuneSlayer application",
+            fields=exit_fields,
+            color=0x747F8D  # Discord grey color
+        )
+    except Exception as e:
+        print(f"Error sending exit webhook: {str(e)}")
+    
     # Get this script's path
     script_path = os.path.abspath(__file__)
     print(f"Script path: {script_path}")
@@ -1461,12 +1794,52 @@ else:
 def main(user_info=None):
     """Main entry point"""
     try:
+        # Log application startup to Discord webhook
+        startup_fields = [
+            {"name": "Event Type", "value": "Application Startup", "inline": True},
+            {"name": "Version", "value": "1.0", "inline": True}
+        ]
+        
+        # Add system info
+        import platform
+        import datetime
+        os_info = f"{platform.system()} {platform.release()}"
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        startup_fields.extend([
+            {"name": "Operating System", "value": os_info, "inline": True},
+            {"name": "Timestamp", "value": current_time, "inline": False}
+        ])
+        
+        # Send webhook
+        send_discord_webhook(
+            title="🚀 RuneSlayer Application Started",
+            description="A user has launched the RuneSlayer application",
+            fields=startup_fields,
+            color=0x5865F2  # Discord blue
+        )
+        
         # Check for cooldown
         on_cooldown, remaining_minutes = is_on_cooldown()
         if on_cooldown:
             # Convert remaining minutes to minutes and seconds
             remaining_mins = int(remaining_minutes)
             remaining_secs = int((remaining_minutes - remaining_mins) * 60)
+            
+            # Log cooldown encounter to Discord webhook
+            cooldown_fields = [
+                {"name": "Event Type", "value": "Cooldown Encountered", "inline": True},
+                {"name": "Remaining Time", "value": f"{remaining_mins}m {remaining_secs}s", "inline": True},
+                {"name": "Timestamp", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "inline": False}
+            ]
+            
+            # Send webhook
+            send_discord_webhook(
+                title="⏳ RuneSlayer Cooldown Active",
+                description="A user attempted to use RuneSlayer while on cooldown",
+                fields=cooldown_fields,
+                color=0xFAA61A  # Orange/warning color
+            )
             
             # Create a simple window to show cooldown message
             root = tk.Tk()
