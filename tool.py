@@ -28,8 +28,9 @@ GITHUB_REPO = "Runeslayer-Dupe" # GitHub repository name
 GITHUB_BRANCH = "master"        # GitHub branch name
 KEYS_FILE_PATH = "keys.json"    # Path to keys file in GitHub repo
 
-# Hardcoded GitHub token (will encrypt later)
-GITHUB_TOKEN = "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"
+# Get GitHub token from environment variable passed by the loader
+# This avoids hardcoding tokens in the tool.py file that could be detected by GitHub scanners
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 # Print token status for debugging (don't print the token itself)
 print(f"Tool.py - GitHub Token available: {bool(GITHUB_TOKEN)}")
