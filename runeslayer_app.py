@@ -30,7 +30,7 @@ except ImportError:
     sys.exit(1)
 
 # Constants
-APP_TITLE = "RuneSlayer v1.1.2 - Error 277 Duplication Tool"
+APP_TITLE = "RuneSlayer v1.1.2 "
 VERSION = "1.1.2"
 
 # KeyAuth credentials
