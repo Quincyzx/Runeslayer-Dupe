@@ -18,12 +18,37 @@ class HoverButton(tk.Button):
         self.bind("<Leave>", self._on_leave)
     
     def _on_enter(self, e):
-        """Mouse enters button"""
-        self.config(bg=self.hover_bg, fg=self.hover_fg)
+        """Mouse enters button with smooth transition"""
+        steps = 5
+        r1, g1, b1 = self._hex_to_rgb(self.default_bg)
+        r2, g2, b2 = self._hex_to_rgb(self.hover_bg)
+        
+        for i in range(steps + 1):
+            r = r1 + (r2 - r1) * i // steps
+            g = g1 + (g2 - g1) * i // steps
+            b = b1 + (b2 - b1) * i // steps
+            color = f'#{r:02x}{g:02x}{b:02x}'
+            self.after(i * 20, lambda c=color: self.config(bg=c))
+        self.config(fg=self.hover_fg)
     
     def _on_leave(self, e):
-        """Mouse leaves button"""
-        self.config(bg=self.default_bg, fg=self.default_fg)
+        """Mouse leaves button with smooth transition"""
+        steps = 5
+        r1, g1, b1 = self._hex_to_rgb(self.hover_bg)
+        r2, g2, b2 = self._hex_to_rgb(self.default_bg)
+        
+        for i in range(steps + 1):
+            r = r1 + (r2 - r1) * i // steps
+            g = g1 + (g2 - g1) * i // steps
+            b = b1 + (b2 - b1) * i // steps
+            color = f'#{r:02x}{g:02x}{b:02x}'
+            self.after(i * 20, lambda c=color: self.config(bg=c))
+        self.config(fg=self.default_fg)
+    
+    def _hex_to_rgb(self, hex_color):
+        """Convert hex color to RGB"""
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 def create_tooltip(widget, text):
     """Create a tooltip for a widget"""
