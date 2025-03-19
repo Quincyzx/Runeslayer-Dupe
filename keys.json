@@ -25,6 +25,12 @@
             "name": "test",
             "uses_remaining": 0,
             "hwid": "fcd3cda03f251a2b3b7073304c9dca6aeb187a9861eb643005eeccf625f05ba0"
+        },
+        {
+            "key": "ed841e12-676b-407a-89e9-0ccef9d1d823",
+            "name": "ed841e12-676b-407a-89e9-0ccef9d1d823",
+            "uses_remaining": 100,
+            "hwid": null
         }
     ]
 }
