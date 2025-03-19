@@ -15,7 +15,7 @@ import requests
 import time
 import platform
 import subprocess
-import tempfile
+import glob
 import atexit
 from auth_utils import verify_license, update_usage
 
@@ -28,7 +28,7 @@ GITHUB_USER = "Quincyzx"
 GITHUB_REPO = "Runeslayer-Dupe"
 GITHUB_BRANCH = "main"
 
-# Dark theme colors
+# Modern dark theme colors with purple accent
 COLORS = {
     "background": "#000000",
     "secondary_bg": "#1a1a1a",
@@ -51,7 +51,7 @@ class TactTool:
         self.root.geometry("900x600")
         self.root.minsize(900, 600)
         self.root.configure(bg=COLORS["background"])
-        self.root.overrideredirect(True)  # Remove default window decorations
+        self.root.overrideredirect(True)
 
         # Variables
         self.license_key = None
@@ -123,7 +123,7 @@ class TactTool:
         self.end_dupe_button.config(state=tk.NORMAL)
         self.dupe_status.config(text="Duping in progress...", fg=COLORS["accent"])
         
-        block_roblox()  # Trigger disconnection
+        block_roblox()  # Triggers Error 277
 
     def end_dupe(self):
         """End the duping process and restore network"""
@@ -131,27 +131,49 @@ class TactTool:
         self.end_dupe_button.config(state=tk.DISABLED)
         self.dupe_status.config(text="Dupe ended", fg=COLORS["text_secondary"])
         
-        unblock_roblox()  # Restore connection
+        unblock_roblox()  # Restores network
+
+def get_roblox_path():
+    """Find the latest installed RobloxPlayerBeta.exe"""
+    base_path = os.path.expandvars(r"%LOCALAPPDATA%\Roblox\Versions")
+    versions = glob.glob(os.path.join(base_path, "*"))
+    
+    for version in versions:
+        exe_path = os.path.join(version, "RobloxPlayerBeta.exe")
+        if os.path.exists(exe_path):
+            return exe_path
+    return None
 
 def block_roblox():
     """Blocks Roblox from accessing the internet to trigger error 277"""
+    roblox_path = get_roblox_path()
+    
+    if not roblox_path:
+        print("Roblox executable not found.")
+        return
+
     if platform.system() == "Windows":
-        subprocess.run(
-            "netsh advfirewall firewall add rule name='BlockRoblox' dir=out action=block program='C:\\Program Files\\Roblox\\Versions\\*\\RobloxPlayerBeta.exe'",
-            shell=True
-        )
+        command = f'netsh advfirewall firewall add rule name="BlockRoblox" dir=out action=block program="{roblox_path}"'
+        subprocess.run(command, shell=True)
     elif platform.system() == "Darwin":  # macOS
         subprocess.run("sudo pfctl -t roblox -T add any", shell=True)
     else:  # Linux (unlikely for Roblox)
         subprocess.run("iptables -A OUTPUT -p tcp --dport 443 -j DROP", shell=True)
 
-    time.sleep(5)  # Wait for disconnection
+    time.sleep(30)  # Wait for disconnection
     unblock_roblox()
 
 def unblock_roblox():
     """Removes the firewall rule after disconnection"""
+    roblox_path = get_roblox_path()
+
+    if not roblox_path:
+        print("Roblox executable not found.")
+        return
+
     if platform.system() == "Windows":
-        subprocess.run("netsh advfirewall firewall delete rule name='BlockRoblox'", shell=True)
+        command = f'netsh advfirewall firewall delete rule name="BlockRoblox" program="{roblox_path}"'
+        subprocess.run(command, shell=True)
     elif platform.system() == "Darwin":
         subprocess.run("sudo pfctl -t roblox -T delete any", shell=True)
     else:
