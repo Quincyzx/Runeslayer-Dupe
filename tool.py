@@ -369,15 +369,54 @@ class TactTool:
         content_frame = tk.Frame(main_frame, bg=COLORS["secondary_bg"])
         content_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Example tool functionality
-        tool_label = tk.Label(
-            content_frame,
-            text="Tool functionality goes here",
-            font=("Segoe UI", 14),
-            bg=COLORS["secondary_bg"],
-            fg=COLORS["text"]
+        # Dupe buttons container
+        buttons_frame = tk.Frame(content_frame, bg=COLORS["secondary_bg"])
+        buttons_frame.pack(pady=40)
+
+        # Dupe button
+        self.dupe_button = tk.Button(
+            buttons_frame,
+            text="START DUPE",
+            font=("Segoe UI", 14, "bold"),
+            bg=COLORS["accent"],
+            fg=COLORS["text"],
+            activebackground=COLORS["accent_hover"],
+            activeforeground=COLORS["text"],
+            relief=tk.FLAT,
+            padx=40,
+            pady=15,
+            command=self.start_dupe,
+            cursor="hand2"
         )
-        tool_label.pack(pady=40)
+        self.dupe_button.pack(side=tk.LEFT, padx=10)
+
+        # End Dupe button
+        self.end_dupe_button = tk.Button(
+            buttons_frame,
+            text="END DUPE",
+            font=("Segoe UI", 14, "bold"),
+            bg=COLORS["danger"],
+            fg=COLORS["text"],
+            activebackground=COLORS["danger_hover"],
+            activeforeground=COLORS["text"],
+            relief=tk.FLAT,
+            padx=40,
+            pady=15,
+            command=self.end_dupe,
+            cursor="hand2",
+            state=tk.DISABLED
+        )
+        self.end_dupe_button.pack(side=tk.LEFT, padx=10)
+
+        # Status label
+        self.dupe_status = tk.Label(
+            content_frame,
+            text="Ready to start",
+            font=("Segoe UI", 12),
+            bg=COLORS["secondary_bg"],
+            fg=COLORS["text_secondary"]
+        )
+        self.dupe_status.pack(pady=(20, 0))
 
         # Exit button at the bottom
         exit_button = tk.Button(
@@ -394,6 +433,18 @@ class TactTool:
             command=self.exit_application
         )
         exit_button.pack(side=tk.BOTTOM, pady=20)
+
+    def start_dupe(self):
+        """Start the duping process"""
+        self.dupe_button.config(state=tk.DISABLED)
+        self.end_dupe_button.config(state=tk.NORMAL)
+        self.dupe_status.config(text="Duping in progress...", fg=COLORS["accent"])
+
+    def end_dupe(self):
+        """End the duping process"""
+        self.dupe_button.config(state=tk.NORMAL)
+        self.end_dupe_button.config(state=tk.DISABLED)
+        self.dupe_status.config(text="Dupe ended", fg=COLORS["text_secondary"])
 
     def exit_application(self):
         """Exit the application"""
