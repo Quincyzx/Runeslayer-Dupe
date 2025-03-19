@@ -165,7 +165,7 @@ class TactTool:
 
         # Logo for login screen
         try:
-            url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/logo.png"
+            url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/Tact.png"
             headers = {
                 "Authorization": f"token {os.environ.get('GITHUB_TOKEN')}",
                 "Accept": "application/vnd.github.v3+json"
@@ -174,13 +174,15 @@ class TactTool:
             if response.status_code == 200:
                 content = base64.b64decode(response.json()['content'])
                 image = Image.open(io.BytesIO(content))
+                # Resize image to match desired size
+                image = image.resize((150, 150), Image.Resampling.LANCZOS)
                 self.logo_image = ImageTk.PhotoImage(image)
                 logo_label = tk.Label(
                     self.auth_frame,
                     image=self.logo_image,
                     bg=COLORS["background"]
                 )
-                logo_label.pack(pady=(0, 30))
+                logo_label.pack(pady=(0, 50))
         except Exception as e:
             print(f"Error loading logo: {e}")
             title_label = tk.Label(
