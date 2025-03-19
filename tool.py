@@ -554,17 +554,16 @@ class TactTool:
             # First, remove any existing rules with the same name
             self.remove_firewall_rules()
             
-            # Create a blocking rule for each IP
-            for ip in ips:
-                # Block outbound connections
-                cmd_out = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=out action=block remoteip={ip}'
-                subprocess.run(cmd_out, shell=True, check=True)
-                
-                # Block inbound connections
-                cmd_in = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=in action=block remoteip={ip}'
-                subprocess.run(cmd_in, shell=True, check=True)
+            # Block the entire Roblox subnet - this is more effective than individual IPs
+            # Create outbound block rule
+            cmd_out = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=out action=block remoteip=128.116.0.0/16'
+            subprocess.run(cmd_out, shell=True, check=True)
             
-            return True, f"Blocked {len(ips)} Roblox IPs"
+            # Create inbound block rule
+            cmd_in = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=in action=block remoteip=128.116.0.0/16'
+            subprocess.run(cmd_in, shell=True, check=True)
+            
+            return True, "Blocked Roblox subnet"
         except Exception as e:
             print(f"Error blocking IPs: {e}")
             return False, f"Error blocking IPs: {str(e)}"
