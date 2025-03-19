@@ -297,9 +297,13 @@ class TactTool:
         self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Add banner to top
+        # Create tab buttons frame at the top
+        self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
+        self.tab_buttons.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # Add banner below tab buttons
         banner_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
-        banner_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        banner_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 10))
         
         # Get and display banner
         try:
@@ -314,7 +318,7 @@ class TactTool:
                 image = Image.open(io.BytesIO(content))
                 # Adjust size to maintain aspect ratio while fitting width
                 aspect_ratio = image.width / image.height
-                new_width = 800
+                new_width = 400  # Smaller banner width
                 new_height = int(new_width / aspect_ratio)
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 self.banner = ImageTk.PhotoImage(image)
@@ -326,10 +330,6 @@ class TactTool:
                 banner_label.pack(fill=tk.X)
         except Exception as e:
             print(f"Error loading banner: {e}")
-
-        # Create tab buttons frame
-        self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
-        self.tab_buttons.pack(fill=tk.X, padx=10, pady=(0, 20))
 
         # Create content frame
         self.content_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
