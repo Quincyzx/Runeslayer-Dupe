@@ -47,9 +47,9 @@ COLORS = {
 }
 
 def get_logo_from_github():
-    """Fetch the logo from GitHub and return as PhotoImage"""
+    """Fetch the banner from GitHub and return as PhotoImage"""
     try:
-        url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/Tact.png"
+        url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/Tactbanner"
         headers = {
             "Authorization": f"token {os.environ.get('GITHUB_TOKEN')}",
             "Accept": "application/vnd.github.v3+json"
@@ -58,10 +58,14 @@ def get_logo_from_github():
         if response.status_code == 200:
             content = base64.b64decode(response.json()['content'])
             image = Image.open(io.BytesIO(content))
-            image = image.resize((200, 200), Image.Resampling.LANCZOS)
+            # Adjust size to maintain aspect ratio while fitting width
+            aspect_ratio = image.width / image.height
+            new_width = 800
+            new_height = int(new_width / aspect_ratio)
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
             return ImageTk.PhotoImage(image)
     except Exception as e:
-        print(f"Error loading logo: {e}")
+        print(f"Error loading banner: {e}")
     return None
 
 class TactTool:
@@ -112,15 +116,35 @@ class TactTool:
         self.auth_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.auth_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, width=400)
 
-        # Logo
-        self.logo_image = get_logo_from_github()
-        if self.logo_image:
-            logo_label = tk.Label(
+        # Logo for login screen
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/logo.png"
+            headers = {
+                "Authorization": f"token {os.environ.get('GITHUB_TOKEN')}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                content = base64.b64decode(response.json()['content'])
+                image = Image.open(io.BytesIO(content))
+                self.logo_image = ImageTk.PhotoImage(image)
+                logo_label = tk.Label(
+                    self.auth_frame,
+                    image=self.logo_image,
+                    bg=COLORS["background"]
+                )
+                logo_label.pack(pady=(0, 30))
+        except Exception as e:
+            print(f"Error loading logo: {e}")
+            # Fallback to text if logo fails to load
+            title_label = tk.Label(
                 self.auth_frame,
-                image=self.logo_image,
-                bg=COLORS["background"]
+                text="Tact Tool",
+                font=("Segoe UI", 32, "bold"),
+                bg=COLORS["background"],
+                fg=COLORS["accent"]
             )
-            logo_label.pack(pady=(0, 30))
+            title_label.pack(pady=(0, 30))
         else:
             # Fallback to text if logo fails to load
             title_label = tk.Label(
@@ -226,19 +250,35 @@ class TactTool:
         self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Add logo to top right
-        logo_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
-        logo_frame.pack(side=tk.TOP, anchor=tk.E, padx=10, pady=10)
+        # Add banner to top
+        banner_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
+        banner_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
         
-        # Get and display logo
-        self.small_logo = get_logo_from_github()
-        if self.small_logo:
-            logo_label = tk.Label(
-                logo_frame,
-                image=self.small_logo,
-                bg=COLORS["background"]
-            )
-            logo_label.pack()
+        # Get and display banner
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/Tactbanner"
+            headers = {
+                "Authorization": f"token {os.environ.get('GITHUB_TOKEN')}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                content = base64.b64decode(response.json()['content'])
+                image = Image.open(io.BytesIO(content))
+                # Adjust size to maintain aspect ratio while fitting width
+                aspect_ratio = image.width / image.height
+                new_width = 800
+                new_height = int(new_width / aspect_ratio)
+                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                self.banner = ImageTk.PhotoImage(image)
+                banner_label = tk.Label(
+                    banner_frame,
+                    image=self.banner,
+                    bg=COLORS["background"]
+                )
+                banner_label.pack(fill=tk.X)
+        except Exception as e:
+            print(f"Error loading banner: {e}")
 
         # Create tab buttons frame
         self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
