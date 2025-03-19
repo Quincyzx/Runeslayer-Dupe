@@ -19,6 +19,12 @@
             "key": "Rox",
             "uses_remaining": 1008,
             "hwid": ""
+        },
+        {
+            "key": "927ae9d4-7c4a-4a3b-8de0-53ff99392be3",
+            "name": "test",
+            "uses_remaining": 1,
+            "hwid": null
         }
     ]
 }
