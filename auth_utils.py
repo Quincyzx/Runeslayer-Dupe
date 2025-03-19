@@ -41,10 +41,15 @@ def get_system_id() -> str:
 def verify_license(key: str, keys_file: str = "keys.json") -> Tuple[bool, Optional[Dict], str]:
     """Verify license key and check HWID"""
     try:
-        # Load keys database from GitHub
-        response = requests.get(f"{GITHUB_RAW_URL}{keys_file}")
-        if response.status_code != 200:
-            return False, None, "Failed to load license database"
+        # Load keys database from GitHub with timeout and error handling
+        try:
+            response = requests.get(f"{GITHUB_RAW_URL}{keys_file}", timeout=10)
+            if response.status_code != 200:
+                return False, None, f"Failed to load license database: HTTP {response.status_code}"
+        except requests.Timeout:
+            return False, None, "Connection timed out while loading license database"
+        except requests.RequestException as e:
+            return False, None, f"Network error: {str(e)}"
         db = response.json()
 
         if 'keys' not in db:
