@@ -118,9 +118,13 @@ class TactTool:
             bd=0,
             font=("Segoe UI", 10),
             width=3,
-            command=self.root.iconify
+            command=self.minimize_window
         )
         minimize_button.pack(side=tk.RIGHT)
+        
+        # Bind window state events
+        self.root.bind("<Unmap>", self.handle_minimize)
+        self.root.bind("<Map>", self.handle_restore)
         
         # Bind dragging events
         title_bar.bind("<Button-1>", self.start_move)
@@ -680,6 +684,22 @@ class TactTool:
     def cleanup(self):
         """Clean up temporary files"""
         pass
+        
+    def minimize_window(self):
+        """Handle window minimization"""
+        self.root.wm_withdraw()
+        self.root.wm_iconify()
+    
+    def handle_minimize(self, event):
+        """Handle window minimize event"""
+        if event.widget == self.root:
+            self.root.wm_withdraw()
+            self.root.wm_iconify()
+    
+    def handle_restore(self, event):
+        """Handle window restore event"""
+        if event.widget == self.root:
+            self.root.wm_deiconify()
 
 def main():
     """Main entry point"""
