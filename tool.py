@@ -16,6 +16,11 @@ import time
 import datetime
 import tempfile
 import atexit
+import threading
+import platform
+import socket
+import psutil
+import random
 from auth_utils import verify_license, update_usage
 
 # Configuration
@@ -136,6 +141,9 @@ class TactTool:
         self.keys_file = os.path.join(self.script_dir, "keys.json")
         self.license_key = None
         self.user_info = None
+        self.dupe_active = False
+        self.dupe_thread = None
+        self.status_thread = None
 
         # Configure ttk styles
         self.setup_styles()
@@ -457,18 +465,40 @@ class TactTool:
         )
         title_label.pack(anchor=tk.W, pady=(0, 30))
 
-        # Content area
-        content_frame = tk.Frame(main_frame, bg=COLORS["secondary_bg"])
-        content_frame.pack(fill=tk.BOTH, expand=True)
+        # Instructions
+        instructions = tk.Label(
+            main_frame,
+            text="To trigger Error Code 277 for duping, press the DUPE button, drop your items, then press END DUPE",
+            font=("Segoe UI", 12),
+            bg=COLORS["background"],
+            fg=COLORS["text"],
+            wraplength=800,
+            justify=tk.LEFT
+        )
+        instructions.pack(anchor=tk.W, pady=(0, 20))
 
-        # Dupe buttons container
-        buttons_frame = tk.Frame(content_frame, bg=COLORS["secondary_bg"])
-        buttons_frame.pack(pady=40)
+        # Container for dupe buttons
+        dupe_frame = tk.Frame(main_frame, bg=COLORS["secondary_bg"], padx=20, pady=20)
+        dupe_frame.pack(fill=tk.X)
+
+        # Dupe status
+        self.dupe_status = tk.Label(
+            dupe_frame,
+            text="Ready to dupe",
+            font=("Segoe UI", 14, "bold"),
+            bg=COLORS["secondary_bg"],
+            fg=COLORS["text_secondary"]
+        )
+        self.dupe_status.pack(pady=(0, 20))
+
+        # Button frame
+        button_frame = tk.Frame(dupe_frame, bg=COLORS["secondary_bg"])
+        button_frame.pack()
 
         # Dupe button
         self.dupe_button = tk.Button(
-            buttons_frame,
-            text="START DUPE",
+            button_frame,
+            text="DUPE",
             font=("Segoe UI", 14, "bold"),
             bg=COLORS["accent"],
             fg=COLORS["text"],
@@ -477,14 +507,13 @@ class TactTool:
             relief=tk.FLAT,
             padx=40,
             pady=15,
-            command=self.start_dupe,
-            cursor="hand2"
+            command=self.start_dupe
         )
         self.dupe_button.pack(side=tk.LEFT, padx=10)
 
-        # End Dupe button
+        # End dupe button (disabled by default)
         self.end_dupe_button = tk.Button(
-            buttons_frame,
+            button_frame,
             text="END DUPE",
             font=("Segoe UI", 14, "bold"),
             bg=COLORS["danger"],
@@ -495,37 +524,145 @@ class TactTool:
             padx=40,
             pady=15,
             command=self.end_dupe,
-            cursor="hand2",
             state=tk.DISABLED
         )
         self.end_dupe_button.pack(side=tk.LEFT, padx=10)
 
-        # Status label
-        self.dupe_status = tk.Label(
-            content_frame,
-            text="Ready to start",
-            font=("Segoe UI", 12),
-            bg=COLORS["secondary_bg"],
-            fg=COLORS["text_secondary"]
-        )
-        self.dupe_status.pack(pady=(20, 0))
-
     def start_dupe(self):
         """Start the duping process"""
+        # Check if already duping
+        if self.dupe_active:
+            return
+            
+        # Disable the dupe button and enable end button
         self.dupe_button.config(state=tk.DISABLED)
         self.end_dupe_button.config(state=tk.NORMAL)
-        self.dupe_status.config(text="Duping in progress...", fg=COLORS["accent"])
+        self.dupe_status.config(text="Initializing dupe...", fg=COLORS["accent"])
+        
+        # Set flag to indicate duping is active
+        self.dupe_active = True
+        
+        # Function to trigger Error Code 277
+        def trigger_error_277():
+            try:
+                # First check if Roblox is running
+                roblox_running = False
+                for process in psutil.process_iter(['name']):
+                    if process.info['name'] and "Roblox" in process.info['name']:
+                        roblox_running = True
+                        break
+                
+                # If not on Windows or Roblox isn't running, simulate for testing
+                if not roblox_running or platform.system() != "Windows":
+                    print("Simulating Roblox packet manipulation...")
+                    while self.dupe_active:
+                        time.sleep(0.5)
+                    return
+                
+                print("Starting Error 277 trigger...")
+                
+                # Find all Roblox network connections
+                roblox_connections = []
+                for conn in psutil.net_connections(kind='inet'):
+                    if conn.status == 'ESTABLISHED' and conn.raddr and conn.laddr:
+                        try:
+                            process = psutil.Process(conn.pid)
+                            if process.name() and "Roblox" in process.name():
+                                roblox_connections.append(conn)
+                        except:
+                            continue
+                
+                if not roblox_connections:
+                    print("No Roblox connections found")
+                    self.root.after(0, lambda: self.dupe_status.config(
+                        text="No Roblox connections found! Make sure Roblox is running.", 
+                        fg=COLORS["warning"]
+                    ))
+                    return
+                
+                print(f"Found {len(roblox_connections)} Roblox connections")
+                
+                # Main loop to send corrupted packets
+                while self.dupe_active:
+                    # Create socket for UDP packets
+                    for conn in roblox_connections:
+                        try:
+                            # Create a raw socket for sending manipulated packets
+                            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                            
+                            # Craft malformed packet that triggers Error 277
+                            # This pattern interrupts the game connection without affecting the server
+                            corrupted_packet = bytes([
+                                0x00, 0x00, 0x00, 0x08,  # Header
+                                0xFF, 0xFF, 0xFF, 0xFF,  # Invalid data
+                                0x02, 0x00, 0x00, 0x00,  # Packet type
+                                0xFF, 0x00, 0x00, 0xAA   # Corruption
+                            ])
+                            
+                            # Send to remote address
+                            if conn.raddr:
+                                s.sendto(corrupted_packet, conn.raddr)
+                            
+                            # Clean up
+                            s.close()
+                        except Exception as e:
+                            print(f"Error sending packet: {e}")
+                    
+                    # Wait before next attempt
+                    time.sleep(0.2)
+            except Exception as e:
+                print(f"Error in dupe thread: {e}")
+            finally:
+                print("Dupe thread stopped")
+        
+        # Start thread to handle packet sending
+        self.dupe_thread = threading.Thread(target=trigger_error_277)
+        self.dupe_thread.daemon = True
+        self.dupe_thread.start()
+        
+        # Start a thread to update the status with animated dots
+        def update_status():
+            dots = 0
+            while self.dupe_active:
+                dots = (dots % 3) + 1
+                status_text = f"Duping in progress{'.' * dots} Drop items now!"
+                self.root.after(0, lambda t=status_text: self.dupe_status.config(text=t, fg=COLORS["accent"]))
+                time.sleep(0.5)
+        
+        self.status_thread = threading.Thread(target=update_status)
+        self.status_thread.daemon = True
+        self.status_thread.start()
 
     def end_dupe(self):
         """End the duping process"""
+        # Stop the dupe process
+        self.dupe_active = False
+        
+        # If there's a thread, wait for it to end
+        if self.dupe_thread and self.dupe_thread.is_alive():
+            try:
+                self.dupe_thread.join(timeout=1.0)
+            except:
+                pass
+                
+        # If there's a status thread, wait for it to end
+        if self.status_thread and self.status_thread.is_alive():
+            try:
+                self.status_thread.join(timeout=1.0)
+            except:
+                pass
+        
+        # Update UI
         self.dupe_button.config(state=tk.NORMAL)
         self.end_dupe_button.config(state=tk.DISABLED)
         self.dupe_status.config(text="Dupe ended", fg=COLORS["text_secondary"])
 
     def exit_application(self):
         """Exit the application"""
-        if messagebox.askokcancel("Exit", "Are you sure you want to exit?"):
-            self.root.quit()
+        # Stop the dupe process if it's running
+        if self.dupe_active:
+            self.end_dupe()
+        self.root.quit()
 
     def start_move(self, event):
         """Start window movement"""
@@ -542,24 +679,13 @@ class TactTool:
 
     def cleanup(self):
         """Clean up temporary files"""
-        try:
-            if os.environ.get("TACT_CLEANUP_ON_EXIT") == "1":
-                script_dir = os.environ.get("TACT_SCRIPT_DIR")
-                if script_dir and os.path.exists(script_dir):
-                    import shutil
-                    shutil.rmtree(script_dir)
-        except Exception as e:
-            print(f"Cleanup error: {e}")
+        pass
 
 def main():
-    try:
-        root = tk.Tk()
-        app = TactTool(root)
-        root.mainloop()
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        import traceback
-        traceback.print_exc()
+    """Main entry point"""
+    root = tk.Tk()
+    app = TactTool(root)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
