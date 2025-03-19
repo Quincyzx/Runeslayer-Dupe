@@ -14,11 +14,11 @@
             "key": "Admin",
             "uses_remaining": 14999999999999999999999999999999999999999999994,
             "hwid": "fcd3cda03f251a2b3b7073304c9dca6aeb187a9861eb643005eeccf625f05ba0"
-        }
+        }, 
         {
             "key": "Rox",
             "uses_remaining": 7,
             "hwid": ""
-        },
+        }
     ]
 }
