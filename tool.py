@@ -21,6 +21,7 @@ import platform
 import socket
 import psutil
 import random
+import subprocess
 from auth_utils import verify_license, update_usage
 
 # Configuration
@@ -118,13 +119,9 @@ class TactTool:
             bd=0,
             font=("Segoe UI", 10),
             width=3,
-            command=self.minimize_window
+            command=self.root.iconify
         )
         minimize_button.pack(side=tk.RIGHT)
-        
-        # Bind window state events
-        self.root.bind("<Unmap>", self.handle_minimize)
-        self.root.bind("<Map>", self.handle_restore)
         
         # Bind dragging events
         title_bar.bind("<Button-1>", self.start_move)
@@ -148,6 +145,7 @@ class TactTool:
         self.dupe_active = False
         self.dupe_thread = None
         self.status_thread = None
+        self.firewall_rule_name = "TactToolRobloxBlock"
 
         # Configure ttk styles
         self.setup_styles()
@@ -469,18 +467,6 @@ class TactTool:
         )
         title_label.pack(anchor=tk.W, pady=(0, 30))
 
-        # Instructions
-        instructions = tk.Label(
-            main_frame,
-            text="To trigger Error Code 277 for duping, press the DUPE button, drop your items, then press END DUPE",
-            font=("Segoe UI", 12),
-            bg=COLORS["background"],
-            fg=COLORS["text"],
-            wraplength=800,
-            justify=tk.LEFT
-        )
-        instructions.pack(anchor=tk.W, pady=(0, 20))
-
         # Container for dupe buttons
         dupe_frame = tk.Frame(main_frame, bg=COLORS["secondary_bg"], padx=20, pady=20)
         dupe_frame.pack(fill=tk.X)
@@ -488,7 +474,7 @@ class TactTool:
         # Dupe status
         self.dupe_status = tk.Label(
             dupe_frame,
-            text="Ready to dupe",
+            text="Ready",
             font=("Segoe UI", 14, "bold"),
             bg=COLORS["secondary_bg"],
             fg=COLORS["text_secondary"]
@@ -532,8 +518,70 @@ class TactTool:
         )
         self.end_dupe_button.pack(side=tk.LEFT, padx=10)
 
+    def get_roblox_ips(self):
+        """Get all active Roblox IP addresses"""
+        roblox_ips = []
+        try:
+            # Find all Roblox processes
+            roblox_processes = []
+            for process in psutil.process_iter(['pid', 'name']):
+                if process.info['name'] and "Roblox" in process.info['name']:
+                    roblox_processes.append(process.info['pid'])
+            
+            # Get all connections from Roblox processes
+            for pid in roblox_processes:
+                try:
+                    process = psutil.Process(pid)
+                    connections = process.connections(kind='inet')
+                    for conn in connections:
+                        if conn.status == 'ESTABLISHED' and conn.raddr:
+                            remote_ip = conn.raddr.ip
+                            if remote_ip not in roblox_ips:
+                                roblox_ips.append(remote_ip)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception as e:
+            print(f"Error getting Roblox IPs: {e}")
+        
+        return roblox_ips
+
+    def block_roblox_ips(self, ips):
+        """Block Roblox IPs using Windows Firewall"""
+        if platform.system() != "Windows":
+            return False, "Firewall blocking only works on Windows"
+        
+        try:
+            # First, remove any existing rules with the same name
+            self.remove_firewall_rules()
+            
+            # Create a blocking rule for each IP
+            for ip in ips:
+                # Block outbound connections
+                cmd_out = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=out action=block remoteip={ip}'
+                subprocess.run(cmd_out, shell=True, check=True)
+                
+                # Block inbound connections
+                cmd_in = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=in action=block remoteip={ip}'
+                subprocess.run(cmd_in, shell=True, check=True)
+            
+            return True, f"Blocked {len(ips)} Roblox IPs"
+        except Exception as e:
+            print(f"Error blocking IPs: {e}")
+            return False, f"Error blocking IPs: {str(e)}"
+
+    def remove_firewall_rules(self):
+        """Remove all firewall rules created by this tool"""
+        if platform.system() != "Windows":
+            return
+        
+        try:
+            cmd = f'netsh advfirewall firewall delete rule name="{self.firewall_rule_name}"'
+            subprocess.run(cmd, shell=True)
+        except Exception as e:
+            print(f"Error removing firewall rules: {e}")
+
     def start_dupe(self):
-        """Start the duping process"""
+        """Start the duping process by blocking Roblox IPs"""
         # Check if already duping
         if self.dupe_active:
             return
@@ -541,101 +589,68 @@ class TactTool:
         # Disable the dupe button and enable end button
         self.dupe_button.config(state=tk.DISABLED)
         self.end_dupe_button.config(state=tk.NORMAL)
-        self.dupe_status.config(text="Initializing dupe...", fg=COLORS["accent"])
+        self.dupe_status.config(text="Active", fg=COLORS["accent"])
         
         # Set flag to indicate duping is active
         self.dupe_active = True
         
-        # Function to trigger Error Code 277
-        def trigger_error_277():
+        # Function to block Roblox IPs
+        def block_roblox_connection():
             try:
-                # First check if Roblox is running
-                roblox_running = False
-                for process in psutil.process_iter(['name']):
-                    if process.info['name'] and "Roblox" in process.info['name']:
-                        roblox_running = True
-                        break
-                
-                # If not on Windows or Roblox isn't running, simulate for testing
-                if not roblox_running or platform.system() != "Windows":
-                    print("Simulating Roblox packet manipulation...")
-                    while self.dupe_active:
-                        time.sleep(0.5)
-                    return
-                
-                print("Starting Error 277 trigger...")
-                
-                # Find all Roblox network connections
-                roblox_connections = []
-                for conn in psutil.net_connections(kind='inet'):
-                    if conn.status == 'ESTABLISHED' and conn.raddr and conn.laddr:
-                        try:
-                            process = psutil.Process(conn.pid)
-                            if process.name() and "Roblox" in process.name():
-                                roblox_connections.append(conn)
-                        except:
-                            continue
-                
-                if not roblox_connections:
-                    print("No Roblox connections found")
+                # Check if running on Windows
+                if platform.system() != "Windows":
+                    print("IP blocking is only supported on Windows")
                     self.root.after(0, lambda: self.dupe_status.config(
-                        text="No Roblox connections found! Make sure Roblox is running.", 
+                        text="Windows required", 
                         fg=COLORS["warning"]
                     ))
                     return
                 
-                print(f"Found {len(roblox_connections)} Roblox connections")
+                # Get Roblox IPs
+                roblox_ips = self.get_roblox_ips()
                 
-                # Main loop to send corrupted packets
+                if not roblox_ips:
+                    print("No Roblox IPs found")
+                    self.root.after(0, lambda: self.dupe_status.config(
+                        text="No Roblox connections", 
+                        fg=COLORS["warning"]
+                    ))
+                    return
+                
+                print(f"Found {len(roblox_ips)} Roblox IPs: {roblox_ips}")
+                
+                # Block the IPs
+                success, message = self.block_roblox_ips(roblox_ips)
+                
+                if success:
+                    print(f"Successfully blocked Roblox IPs: {message}")
+                else:
+                    print(f"Failed to block Roblox IPs: {message}")
+                    self.root.after(0, lambda: self.dupe_status.config(
+                        text=message, 
+                        fg=COLORS["warning"]
+                    ))
+                
+                # Keep the thread alive while duping is active
                 while self.dupe_active:
-                    # Create socket for UDP packets
-                    for conn in roblox_connections:
-                        try:
-                            # Create a raw socket for sending manipulated packets
-                            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                            
-                            # Craft malformed packet that triggers Error 277
-                            # This pattern interrupts the game connection without affecting the server
-                            corrupted_packet = bytes([
-                                0x00, 0x00, 0x00, 0x08,  # Header
-                                0xFF, 0xFF, 0xFF, 0xFF,  # Invalid data
-                                0x02, 0x00, 0x00, 0x00,  # Packet type
-                                0xFF, 0x00, 0x00, 0xAA   # Corruption
-                            ])
-                            
-                            # Send to remote address
-                            if conn.raddr:
-                                s.sendto(corrupted_packet, conn.raddr)
-                            
-                            # Clean up
-                            s.close()
-                        except Exception as e:
-                            print(f"Error sending packet: {e}")
+                    time.sleep(0.5)
                     
-                    # Wait before next attempt
-                    time.sleep(0.2)
+                # Clean up when duping ends
+                self.remove_firewall_rules()
+                
             except Exception as e:
                 print(f"Error in dupe thread: {e}")
+                self.root.after(0, lambda: self.dupe_status.config(
+                    text=f"Error: {str(e)}", 
+                    fg=COLORS["danger"]
+                ))
             finally:
                 print("Dupe thread stopped")
         
-        # Start thread to handle packet sending
-        self.dupe_thread = threading.Thread(target=trigger_error_277)
+        # Start thread to handle IP blocking
+        self.dupe_thread = threading.Thread(target=block_roblox_connection)
         self.dupe_thread.daemon = True
         self.dupe_thread.start()
-        
-        # Start a thread to update the status with animated dots
-        def update_status():
-            dots = 0
-            while self.dupe_active:
-                dots = (dots % 3) + 1
-                status_text = f"Duping in progress{'.' * dots} Drop items now!"
-                self.root.after(0, lambda t=status_text: self.dupe_status.config(text=t, fg=COLORS["accent"]))
-                time.sleep(0.5)
-        
-        self.status_thread = threading.Thread(target=update_status)
-        self.status_thread.daemon = True
-        self.status_thread.start()
 
     def end_dupe(self):
         """End the duping process"""
@@ -648,24 +663,24 @@ class TactTool:
                 self.dupe_thread.join(timeout=1.0)
             except:
                 pass
-                
-        # If there's a status thread, wait for it to end
-        if self.status_thread and self.status_thread.is_alive():
-            try:
-                self.status_thread.join(timeout=1.0)
-            except:
-                pass
+        
+        # Make sure all firewall rules are removed
+        self.remove_firewall_rules()
         
         # Update UI
         self.dupe_button.config(state=tk.NORMAL)
         self.end_dupe_button.config(state=tk.DISABLED)
-        self.dupe_status.config(text="Dupe ended", fg=COLORS["text_secondary"])
+        self.dupe_status.config(text="Ready", fg=COLORS["text_secondary"])
 
     def exit_application(self):
         """Exit the application"""
         # Stop the dupe process if it's running
         if self.dupe_active:
             self.end_dupe()
+        
+        # Remove any remaining firewall rules
+        self.remove_firewall_rules()
+        
         self.root.quit()
 
     def start_move(self, event):
@@ -682,24 +697,9 @@ class TactTool:
         self.root.geometry(f"+{x}+{y}")
 
     def cleanup(self):
-        """Clean up temporary files"""
-        pass
-        
-    def minimize_window(self):
-        """Handle window minimization"""
-        self.root.wm_withdraw()
-        self.root.wm_iconify()
-    
-    def handle_minimize(self, event):
-        """Handle window minimize event"""
-        if event.widget == self.root:
-            self.root.wm_withdraw()
-            self.root.wm_iconify()
-    
-    def handle_restore(self, event):
-        """Handle window restore event"""
-        if event.widget == self.root:
-            self.root.wm_deiconify()
+        """Clean up temporary files and remove firewall rules"""
+        # Make sure all firewall rules are removed
+        self.remove_firewall_rules()
 
 def main():
     """Main entry point"""
