@@ -8,7 +8,10 @@ import datetime
 import uuid
 import socket
 import platform
+import requests
 from typing import Dict, Tuple, Optional, List
+
+GITHUB_RAW_URL = "https://raw.githubusercontent.com/<user>/<repo>/main/" # Replace with your GitHub raw URL
 
 def update_github_file(file_path: str, content: str, commit_message: str) -> Tuple[bool, str]:
     """Update a file in GitHub repository"""
@@ -27,7 +30,7 @@ def get_system_id() -> str:
         hostname = socket.gethostname()
         machine_id = str(uuid.getnode())  # MAC address as integer
         system_info = platform.system() + platform.version()
-        
+
         # Combine and hash to create a unique but consistent identifier
         combined = f"{hostname}-{machine_id}-{system_info}"
         return str(uuid.uuid5(uuid.NAMESPACE_DNS, combined))
@@ -35,26 +38,24 @@ def get_system_id() -> str:
         # Fallback to a random UUID if system info can't be retrieved
         return str(uuid.uuid4())
 
-def verify_license(key: str, keys_file: str) -> Tuple[bool, Optional[Dict], str]:
+def verify_license(key: str, keys_file: str = "keys.json") -> Tuple[bool, Optional[Dict], str]:
     """Verify license key and check HWID"""
     try:
-        # Check if file exists
-        if not os.path.exists(keys_file):
-            return False, None, "License database not found"
-        
-        # Load keys database
-        with open(keys_file, 'r') as f:
-            db = json.load(f)
-        
+        # Load keys database from GitHub
+        response = requests.get(f"{GITHUB_RAW_URL}{keys_file}")
+        if response.status_code != 200:
+            return False, None, "Failed to load license database"
+        db = response.json()
+
         if 'keys' not in db:
             return False, None, "Invalid license database format"
-        
+
         # Check if key exists
         if key not in db['keys']:
             return False, None, "Invalid license key"
-        
+
         user_data = db['keys'][key]
-        
+
         # Check if license is expired
         if 'expires' in user_data:
             try:
@@ -64,55 +65,52 @@ def verify_license(key: str, keys_file: str) -> Tuple[bool, Optional[Dict], str]
                     return False, None, "License has expired"
             except:
                 pass  # Skip expiry check if date format is invalid
-        
+
         # Check if uses are exhausted
         if 'uses_remaining' in user_data and user_data['uses_remaining'] <= 0:
             return False, None, "License usage count exhausted"
-        
+
         # Check HWID if it's set
         current_hwid = get_system_id()
         if 'hwid' in user_data and user_data['hwid'] and user_data['hwid'] != current_hwid:
             return False, None, "Hardware ID verification failed"
-        
-        # If HWID is not set, set it now
+
+        # If HWID is not set, set it now.  This requires a GitHub API update, which is simulated.
         if 'hwid' not in user_data or not user_data['hwid']:
-            db['keys'][key]['hwid'] = current_hwid
-            with open(keys_file, 'w') as f:
-                json.dump(db, f, indent=2)
-        
+            user_data['hwid'] = current_hwid
+            success, message = update_github_file(keys_file, json.dumps(db, indent=2), f"Update HWID for {key}")
+            if not success:
+                return False, None, f"Failed to update HWID: {message}"
+
         return True, user_data, "License verified successfully"
-    
+
     except Exception as e:
         return False, None, f"Verification error: {str(e)}"
 
-def update_usage(key: str, keys_file: str) -> Tuple[bool, str]:
+def update_usage(key: str, keys_file: str = "keys.json") -> Tuple[bool, str]:
     """Update usage count for license key"""
     try:
-        # Check if file exists
-        if not os.path.exists(keys_file):
-            return False, "License database not found"
-        
-        # Load keys database
-        with open(keys_file, 'r') as f:
-            db = json.load(f)
-        
+        # Load keys database from GitHub
+        response = requests.get(f"{GITHUB_RAW_URL}{keys_file}")
+        if response.status_code != 200:
+            return False, "Failed to load license database"
+        db = response.json()
+
         if 'keys' not in db or key not in db['keys']:
             return False, "Invalid license key"
-        
+
         # Update usage count if it exists
         if 'uses_remaining' in db['keys'][key]:
             db['keys'][key]['uses_remaining'] -= 1
-            
-            # Save updated database
-            with open(keys_file, 'w') as f:
-                json.dump(db, f, indent=2)
-            
-            # In a real app, you would also update the remote copy
-            # update_github_file("keys.json", json.dumps(db, indent=2), f"Update usage for {key}")
-            
+
+            # Save updated database to GitHub (simulated)
+            success, message = update_github_file(keys_file, json.dumps(db, indent=2), f"Update usage for {key}")
+            if not success:
+                return False, f"Failed to update usage: {message}"
+
             return True, "Usage count updated"
-        
+
         return True, "No usage count to update"
-    
+
     except Exception as e:
         return False, f"Usage update error: {str(e)}"
