@@ -4,118 +4,206 @@ Handles HWID generation, license verification, and usage tracking
 """
 import os
 import json
-import datetime
-import uuid
-import socket
+import hashlib
 import platform
 import requests
-from typing import Dict, Tuple, Optional, List
+import socket
+import uuid
+import getpass
+import base64
+from typing import Dict, Tuple, Optional
 
-GITHUB_RAW_URL = "https://raw.githubusercontent.com/<user>/<repo>/main/" # Replace with your GitHub raw URL
+# GitHub Configuration
+GITHUB_USER = "Quincyzx"
+GITHUB_REPO = "Runeslayer-Dupe"
+GITHUB_BRANCH = "main"
 
 def update_github_file(file_path: str, content: str, commit_message: str) -> Tuple[bool, str]:
     """Update a file in GitHub repository"""
     try:
-        # In real implementation, use GitHub API to update file
-        # For this demo, just print the intent
-        print(f"Would update GitHub file {file_path} with message: {commit_message}")
-        return True, "Update simulated successfully"
+        # Get token from environment
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if not github_token:
+            return False, "GitHub token not found in environment"
+
+        # GitHub API endpoint
+        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{file_path}"
+        headers = {
+            "Authorization": f"token {github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        # Get current file info
+        response = requests.get(api_url, headers=headers)
+        if response.status_code == 401:
+            return False, "Invalid GitHub token. Authentication failed."
+        elif response.status_code != 200:
+            return False, f"Failed to get file info: {response.status_code}"
+
+        file_info = response.json()
+        current_sha = file_info.get('sha')
+
+        # Prepare update data
+        update_data = {
+            "message": commit_message,
+            "content": base64.b64encode(content.encode()).decode(),
+            "sha": current_sha,
+            "branch": GITHUB_BRANCH
+        }
+
+        # Update file
+        response = requests.put(api_url, headers=headers, json=update_data)
+        if response.status_code == 401:
+            return False, "Invalid GitHub token for update"
+        elif response.status_code not in [200, 201]:
+            return False, f"Failed to update file: {response.status_code}"
+
+        return True, "File updated successfully"
+
     except Exception as e:
-        return False, str(e)
+        return False, f"GitHub update error: {str(e)}"
 
 def get_system_id() -> str:
     """Generate a unique system identifier"""
     try:
-        # Get various system identifiers
-        hostname = socket.gethostname()
-        machine_id = str(uuid.getnode())  # MAC address as integer
-        system_info = platform.system() + platform.version()
+        # Get system information
+        system_info = [
+            platform.node(),
+            platform.machine(),
+            platform.processor(),
+            getpass.getuser(),
+            socket.gethostname()
+        ]
 
-        # Combine and hash to create a unique but consistent identifier
-        combined = f"{hostname}-{machine_id}-{system_info}"
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, combined))
-    except:
-        # Fallback to a random UUID if system info can't be retrieved
-        return str(uuid.uuid4())
+        # Add Windows-specific identifiers
+        if platform.system() == "Windows":
+            try:
+                import wmi
+                c = wmi.WMI()
+                system_info.extend([
+                    c.Win32_Processor()[0].ProcessorId.strip(),
+                    c.Win32_BIOS()[0].SerialNumber.strip(),
+                    c.Win32_BaseBoard()[0].SerialNumber.strip()
+                ])
+            except:
+                pass
 
-def verify_license(key: str, keys_file: str = "keys.json") -> Tuple[bool, Optional[Dict], str]:
+        # Add Linux-specific identifiers
+        elif platform.system() == "Linux":
+            try:
+                with open('/etc/machine-id', 'r') as f:
+                    system_info.append(f.read().strip())
+            except:
+                pass
+
+        # Add macOS-specific identifiers
+        elif platform.system() == "Darwin":
+            try:
+                import subprocess
+                result = subprocess.check_output(["system_profiler", "SPHardwareDataType"])
+                system_info.append(result.decode())
+            except:
+                pass
+
+        # Generate hash from system information
+        system_id = hashlib.sha256('+'.join(system_info).encode()).hexdigest()
+        return system_id
+
+    except Exception as e:
+        print(f"Error generating system ID: {e}")
+        # Fallback to basic system info
+        basic_info = [
+            platform.node(),
+            platform.machine(),
+            getpass.getuser(),
+            socket.gethostname()
+        ]
+        return hashlib.md5('+'.join(basic_info).encode()).hexdigest()
+
+def verify_license(key: str, keys_file: str) -> Tuple[bool, Optional[Dict], str]:
     """Verify license key and check HWID"""
     try:
-        # Load keys database from GitHub with timeout and error handling
-        try:
-            response = requests.get(f"{GITHUB_RAW_URL}{keys_file}", timeout=10)
-            if response.status_code != 200:
-                return False, None, f"Failed to load license database: HTTP {response.status_code}"
-        except requests.Timeout:
-            return False, None, "Connection timed out while loading license database"
-        except requests.RequestException as e:
-            return False, None, f"Network error: {str(e)}"
-        db = response.json()
+        # Read keys file
+        with open(keys_file, 'r') as f:
+            keys_data = json.load(f)
 
-        if 'keys' not in db:
-            return False, None, "Invalid license database format"
+        # Find the key in the keys array
+        key_entry = None
+        for entry in keys_data.get('keys', []):
+            if entry.get('key') == key:
+                key_entry = entry
+                break
 
-        # Check if key exists
-        if key not in db['keys']:
+        if not key_entry:
             return False, None, "Invalid license key"
 
-        user_data = db['keys'][key]
+        # Check uses remaining
+        uses_remaining = key_entry.get('uses_remaining', 0)
+        if uses_remaining <= 0:
+            return False, None, "No uses remaining"
 
-        # Check if license is expired
-        if 'expires' in user_data:
-            try:
-                expiry_date = datetime.datetime.strptime(user_data['expires'], '%Y-%m-%d').date()
-                today = datetime.datetime.now().date()
-                if today > expiry_date:
-                    return False, None, "License has expired"
-            except:
-                pass  # Skip expiry check if date format is invalid
-
-        # Check if uses are exhausted
-        if 'uses_remaining' in user_data and user_data['uses_remaining'] <= 0:
-            return False, None, "License usage count exhausted"
-
-        # Check HWID if it's set
+        # Get current system ID
         current_hwid = get_system_id()
-        if 'hwid' in user_data and user_data['hwid'] and user_data['hwid'] != current_hwid:
-            return False, None, "Hardware ID verification failed"
 
-        # If HWID is not set, set it now.  This requires a GitHub API update, which is simulated.
-        if 'hwid' not in user_data or not user_data['hwid']:
-            user_data['hwid'] = current_hwid
-            success, message = update_github_file(keys_file, json.dumps(db, indent=2), f"Update HWID for {key}")
+        # Check HWID if registered
+        registered_hwid = key_entry.get('hwid')
+        if registered_hwid:
+            if registered_hwid != current_hwid:
+                return False, None, "Hardware ID mismatch"
+        else:
+            # Register HWID for new user
+            key_entry['hwid'] = current_hwid
+
+            # Save updated keys file locally
+            with open(keys_file, 'w') as f:
+                json.dump(keys_data, f, indent=4)
+
+            # Update GitHub
+            success, message = update_github_file(
+                'keys.json',
+                json.dumps(keys_data, indent=4),
+                f"Update HWID for key: {key}"
+            )
             if not success:
-                return False, None, f"Failed to update HWID: {message}"
+                print(f"Warning: Failed to update GitHub: {message}")
 
-        return True, user_data, "License verified successfully"
+        return True, key_entry, "Success"
 
     except Exception as e:
         return False, None, f"Verification error: {str(e)}"
 
-def update_usage(key: str, keys_file: str = "keys.json") -> Tuple[bool, str]:
+def update_usage(key: str, keys_file: str) -> Tuple[bool, str]:
     """Update usage count for license key"""
     try:
-        # Load keys database from GitHub
-        response = requests.get(f"{GITHUB_RAW_URL}{keys_file}")
-        if response.status_code != 200:
-            return False, "Failed to load license database"
-        db = response.json()
+        # Read keys file
+        with open(keys_file, 'r') as f:
+            keys_data = json.load(f)
 
-        if 'keys' not in db or key not in db['keys']:
+        # Find and update the key
+        key_updated = False
+        for entry in keys_data.get('keys', []):
+            if entry.get('key') == key:
+                entry['uses_remaining'] = max(0, entry.get('uses_remaining', 0) - 1)
+                key_updated = True
+                break
+
+        if not key_updated:
             return False, "Invalid license key"
 
-        # Update usage count if it exists
-        if 'uses_remaining' in db['keys'][key]:
-            db['keys'][key]['uses_remaining'] -= 1
+        # Save updated keys file locally
+        with open(keys_file, 'w') as f:
+            json.dump(keys_data, f, indent=4)
 
-            # Save updated database to GitHub (simulated)
-            success, message = update_github_file(keys_file, json.dumps(db, indent=2), f"Update usage for {key}")
-            if not success:
-                return False, f"Failed to update usage: {message}"
+        # Update GitHub
+        success, message = update_github_file(
+            'keys.json',
+            json.dumps(keys_data, indent=4),
+            f"Update usage count for key: {key}"
+        )
+        if not success:
+            print(f"Warning: Failed to update GitHub: {message}")
 
-            return True, "Usage count updated"
-
-        return True, "No usage count to update"
+        return True, "Usage updated successfully"
 
     except Exception as e:
-        return False, f"Usage update error: {str(e)}"
+        return False, f"Update error: {str(e)}"
