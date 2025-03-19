@@ -22,6 +22,11 @@ from auth_utils import verify_license, update_usage
 APP_TITLE = "Tact Tool"
 VERSION = "1.0"
 
+# GitHub Configuration
+GITHUB_USER = "Quincyzx"
+GITHUB_REPO = "Runeslayer-Dupe"
+GITHUB_BRANCH = "main"
+
 # Modern dark theme colors with purple accent
 COLORS = {
     "background": "#000000",  # Black background
