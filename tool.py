@@ -183,17 +183,6 @@ class TactTool:
                 logo_label.pack(pady=(0, 30))
         except Exception as e:
             print(f"Error loading logo: {e}")
-            # Fallback to text if logo fails to load
-            title_label = tk.Label(
-                self.auth_frame,
-                text="Tact Tool",
-                font=("Segoe UI", 32, "bold"),
-                bg=COLORS["background"],
-                fg=COLORS["accent"]
-            )
-            title_label.pack(pady=(0, 30))
-        else:
-            # Fallback to text if logo fails to load
             title_label = tk.Label(
                 self.auth_frame,
                 text="Tact Tool",
@@ -295,15 +284,15 @@ class TactTool:
 
         # Create main UI
         self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Create tab buttons frame at the top
+        # Create tab buttons frame at the very top
         self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
-        self.tab_buttons.pack(fill=tk.X, padx=10, pady=(0, 10))
+        self.tab_buttons.pack(fill=tk.X, padx=10, pady=5)
 
-        # Add banner below tab buttons
+        # Add banner below tab buttons with transparent background
         banner_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
-        banner_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 10))
+        banner_frame.pack(fill=tk.X, padx=10, pady=5)
         
         # Get and display banner
         try:
@@ -318,7 +307,7 @@ class TactTool:
                 image = Image.open(io.BytesIO(content))
                 # Adjust size to maintain aspect ratio while fitting width
                 aspect_ratio = image.width / image.height
-                new_width = 400  # Smaller banner width
+                new_width = 300  # Even smaller banner width
                 new_height = int(new_width / aspect_ratio)
                 image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 self.banner = ImageTk.PhotoImage(image)
