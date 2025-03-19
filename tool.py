@@ -8,6 +8,10 @@ import sys
 import json
 import tkinter as tk
 from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
+import io
+import base64
+import requests
 import time
 import datetime
 import tempfile
@@ -18,12 +22,12 @@ from auth_utils import verify_license, update_usage
 APP_TITLE = "Tact Tool"
 VERSION = "1.0"
 
-# Modern dark theme colors - Roblox executor inspired
+# Modern dark theme colors with purple accent
 COLORS = {
-    "background": "#121212",  # Darker background
-    "secondary_bg": "#1e1e1e",  # Slightly lighter background
-    "accent": "#00b4ff",  # Bright cyan accent
-    "accent_hover": "#0095d9",
+    "background": "#000000",  # Black background
+    "secondary_bg": "#1a1a1a",  # Slightly lighter black
+    "accent": "#cb6ce6",  # Purple accent
+    "accent_hover": "#b44ecc",  # Darker purple
     "text": "#ffffff",
     "text_secondary": "#858585",
     "success": "#2ecc71",
@@ -32,10 +36,28 @@ COLORS = {
     "danger_hover": "#c0392b",
     "border": "#2a2a2a",
     "input_bg": "#1a1a1a",
-    "tab_active": "#00b4ff",
+    "tab_active": "#cb6ce6",
     "tab_inactive": "#1a1a1a",
     "tab_hover": "#252525"
 }
+
+def get_logo_from_github():
+    """Fetch the logo from GitHub and return as PhotoImage"""
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/Tact.png"
+        headers = {
+            "Authorization": f"token {os.environ.get('GITHUB_TOKEN')}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            content = base64.b64decode(response.json()['content'])
+            image = Image.open(io.BytesIO(content))
+            image = image.resize((200, 200), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(image)
+    except Exception as e:
+        print(f"Error loading logo: {e}")
+    return None
 
 class TactTool:
     def __init__(self, root):
@@ -85,15 +107,25 @@ class TactTool:
         self.auth_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.auth_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER, width=400)
 
-        # Title
-        title_label = tk.Label(
-            self.auth_frame,
-            text="Tact Tool",
-            font=("Segoe UI", 32, "bold"),
-            bg=COLORS["background"],
-            fg=COLORS["accent"]
-        )
-        title_label.pack(pady=(0, 30))
+        # Logo
+        self.logo_image = get_logo_from_github()
+        if self.logo_image:
+            logo_label = tk.Label(
+                self.auth_frame,
+                image=self.logo_image,
+                bg=COLORS["background"]
+            )
+            logo_label.pack(pady=(0, 30))
+        else:
+            # Fallback to text if logo fails to load
+            title_label = tk.Label(
+                self.auth_frame,
+                text="Tact Tool",
+                font=("Segoe UI", 32, "bold"),
+                bg=COLORS["background"],
+                fg=COLORS["accent"]
+            )
+            title_label.pack(pady=(0, 30))
 
         # License key entry frame
         key_frame = tk.Frame(self.auth_frame, bg=COLORS["background"])
