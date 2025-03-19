@@ -291,7 +291,7 @@ class TactTool:
 
         # HWID info
         hwid = self.user_info.get('hwid', 'Not registered')
-        self.create_info_row(info_frame, "Hardware ID", hwid[:16] + "...", 2)
+        self.create_info_row(info_frame, "Hardware ID", hwid, 2)
 
     def create_info_row(self, parent, label, value, row):
         """Create a row of information in the profile tab"""
