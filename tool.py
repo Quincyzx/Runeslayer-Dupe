@@ -75,6 +75,53 @@ class TactTool:
         self.root.geometry("900x600")
         self.root.minsize(900, 600)
         self.root.configure(bg=COLORS["background"])
+        self.root.overrideredirect(True)  # Remove default window decorations
+        
+        # Custom title bar
+        title_bar = tk.Frame(self.root, bg=COLORS["background"], height=30)
+        title_bar.pack(fill=tk.X, side=tk.TOP)
+        title_bar.pack_propagate(False)
+        
+        # Title
+        title_label = tk.Label(
+            title_bar,
+            text=APP_TITLE,
+            bg=COLORS["background"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 10)
+        )
+        title_label.pack(side=tk.LEFT, padx=10)
+        
+        # Minimize and close buttons
+        close_button = tk.Button(
+            title_bar,
+            text="✕",
+            bg=COLORS["background"],
+            fg=COLORS["text"],
+            bd=0,
+            font=("Segoe UI", 10),
+            width=3,
+            command=self.root.quit
+        )
+        close_button.pack(side=tk.RIGHT)
+        
+        minimize_button = tk.Button(
+            title_bar,
+            text="−",
+            bg=COLORS["background"],
+            fg=COLORS["text"],
+            bd=0,
+            font=("Segoe UI", 10),
+            width=3,
+            command=self.root.iconify
+        )
+        minimize_button.pack(side=tk.RIGHT)
+        
+        # Bind dragging events
+        title_bar.bind("<Button-1>", self.start_move)
+        title_bar.bind("<B1-Motion>", self.on_move)
+        title_label.bind("<Button-1>", self.start_move)
+        title_label.bind("<B1-Motion>", self.on_move)
 
         # Center window
         self.root.update_idletasks()
@@ -488,6 +535,19 @@ class TactTool:
         """Exit the application"""
         if messagebox.askokcancel("Exit", "Are you sure you want to exit?"):
             self.root.quit()
+
+    def start_move(self, event):
+        """Start window movement"""
+        self.x = event.x
+        self.y = event.y
+
+    def on_move(self, event):
+        """Handle window movement"""
+        deltax = event.x - self.x
+        deltay = event.y - self.y
+        x = self.root.winfo_x() + deltax
+        y = self.root.winfo_y() + deltay
+        self.root.geometry(f"+{x}+{y}")
 
     def cleanup(self):
         """Clean up temporary files"""
