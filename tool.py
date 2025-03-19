@@ -73,35 +73,6 @@ class TactTool:
         """Set up custom ttk styles"""
         style = ttk.Style()
 
-        # Configure notebook (tab container)
-        style.configure(
-            "Custom.TNotebook",
-            background=COLORS["background"],
-            borderwidth=0,
-            padding=0
-        )
-
-        # Configure notebook tabs
-        style.configure(
-            "Custom.TNotebook.Tab",
-            padding=[20, 12],
-            background=COLORS["tab_inactive"],
-            foreground=COLORS["text"],
-            font=("Segoe UI", 11)
-        )
-
-        style.map(
-            "Custom.TNotebook.Tab",
-            background=[
-                ("selected", COLORS["tab_active"]),
-                ("active", COLORS["tab_hover"])
-            ],
-            foreground=[
-                ("selected", COLORS["text"]),
-                ("active", COLORS["text"])
-            ]
-        )
-
         # Configure frames
         style.configure(
             "Custom.TFrame",
@@ -214,23 +185,82 @@ class TactTool:
         # Remove authentication UI
         self.auth_frame.destroy()
 
-        # Create main UI with tabs
-        self.main_frame = ttk.Frame(self.root, style="Custom.TFrame")
+        # Create main UI
+        self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-        # Create notebook for tabs
-        self.notebook = ttk.Notebook(self.main_frame, style="Custom.TNotebook")
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        # Create tab buttons frame
+        self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
+        self.tab_buttons.pack(fill=tk.X, padx=10, pady=(0, 20))
 
-        # Create Profile tab
-        self.profile_tab = ttk.Frame(self.notebook, style="Custom.TFrame")
-        self.notebook.add(self.profile_tab, text="Profile")
+        # Create content frame
+        self.content_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
+        self.content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Create tab buttons
+        self.current_tab = tk.StringVar(value="profile")
+
+        profile_btn = tk.Button(
+            self.tab_buttons,
+            text="Profile",
+            font=("Segoe UI", 11),
+            bg=COLORS["accent"] if self.current_tab.get() == "profile" else COLORS["tab_inactive"],
+            fg=COLORS["text"],
+            relief=tk.FLAT,
+            padx=30,
+            pady=12,
+            command=lambda: self.switch_tab("profile"),
+            cursor="hand2"
+        )
+        profile_btn.pack(side=tk.LEFT, padx=5)
+
+        main_btn = tk.Button(
+            self.tab_buttons,
+            text="Main",
+            font=("Segoe UI", 11),
+            bg=COLORS["tab_inactive"],
+            fg=COLORS["text"],
+            relief=tk.FLAT,
+            padx=30,
+            pady=12,
+            command=lambda: self.switch_tab("main"),
+            cursor="hand2"
+        )
+        main_btn.pack(side=tk.LEFT, padx=5)
+
+        # Store buttons for later reference
+        self.tab_buttons_dict = {
+            "profile": profile_btn,
+            "main": main_btn
+        }
+
+        # Create tab frames
+        self.profile_tab = tk.Frame(self.content_frame, bg=COLORS["background"])
+        self.main_tab = tk.Frame(self.content_frame, bg=COLORS["background"])
+
+        # Set up initial tab
         self.setup_profile_tab()
-
-        # Create Main tab
-        self.main_tab = ttk.Frame(self.notebook, style="Custom.TFrame")
-        self.notebook.add(self.main_tab, text="Main")
         self.setup_main_tab()
+        self.switch_tab("profile")
+
+    def switch_tab(self, tab_name):
+        """Switch between tabs"""
+        # Update button colors
+        for name, button in self.tab_buttons_dict.items():
+            button.configure(bg=COLORS["accent"] if name == tab_name else COLORS["tab_inactive"])
+
+        # Update current tab
+        self.current_tab.set(tab_name)
+
+        # Hide all tabs
+        self.profile_tab.pack_forget()
+        self.main_tab.pack_forget()
+
+        # Show selected tab
+        if tab_name == "profile":
+            self.profile_tab.pack(fill=tk.BOTH, expand=True)
+        else:
+            self.main_tab.pack(fill=tk.BOTH, expand=True)
 
     def setup_profile_tab(self):
         """Set up the profile tab content"""
