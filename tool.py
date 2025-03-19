@@ -226,6 +226,20 @@ class TactTool:
         self.main_frame = tk.Frame(self.root, bg=COLORS["background"])
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
+        # Add logo to top right
+        logo_frame = tk.Frame(self.main_frame, bg=COLORS["background"])
+        logo_frame.pack(side=tk.TOP, anchor=tk.E, padx=10, pady=10)
+        
+        # Get and display logo
+        self.small_logo = get_logo_from_github()
+        if self.small_logo:
+            logo_label = tk.Label(
+                logo_frame,
+                image=self.small_logo,
+                bg=COLORS["background"]
+            )
+            logo_label.pack()
+
         # Create tab buttons frame
         self.tab_buttons = tk.Frame(self.main_frame, bg=COLORS["background"])
         self.tab_buttons.pack(fill=tk.X, padx=10, pady=(0, 20))
@@ -417,22 +431,6 @@ class TactTool:
             fg=COLORS["text_secondary"]
         )
         self.dupe_status.pack(pady=(20, 0))
-
-        # Exit button at the bottom
-        exit_button = tk.Button(
-            self.main_frame,
-            text="EXIT",
-            font=("Segoe UI", 12, "bold"),
-            bg=COLORS["danger"],
-            fg=COLORS["text"],
-            activebackground=COLORS["danger_hover"],
-            activeforeground=COLORS["text"],
-            relief=tk.FLAT,
-            padx=30,
-            pady=10,
-            command=self.exit_application
-        )
-        exit_button.pack(side=tk.BOTTOM, pady=20)
 
     def start_dupe(self):
         """Start the duping process"""
