@@ -145,7 +145,8 @@ class TactTool:
         self.dupe_active = False
         self.dupe_thread = None
         self.status_thread = None
-        self.firewall_rule_name = "TactToolRobloxBlock"
+        self.roblox_sockets = []
+        self.original_data = None
 
         # Configure ttk styles
         self.setup_styles()
@@ -518,69 +519,239 @@ class TactTool:
         )
         self.end_dupe_button.pack(side=tk.LEFT, padx=10)
 
-    def get_roblox_ips(self):
-        """Get all active Roblox IP addresses"""
-        roblox_ips = []
+    def find_roblox_processes(self):
+        """Find all Roblox processes and return their PIDs"""
+        roblox_pids = []
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if proc.info['name'] and "Roblox" in proc.info['name']:
+                    roblox_pids.append(proc.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        return roblox_pids
+
+    def inject_data_loss_packets(self, roblox_pids):
+        """Disrupt Roblox traffic by injecting bad packets directly into the game memory"""
         try:
-            # Find all Roblox processes
-            roblox_processes = []
-            for process in psutil.process_iter(['pid', 'name']):
-                if process.info['name'] and "Roblox" in process.info['name']:
-                    roblox_processes.append(process.info['pid'])
+            # This is a direct packet injection approach
+            corrupt_packets = 0
             
-            # Get all connections from Roblox processes
-            for pid in roblox_processes:
+            for pid in roblox_pids:
                 try:
+                    # Create a raw socket for sending packets
+                    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+                    s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                    self.roblox_sockets.append(s)
+                    
+                    # Get all connections for this Roblox process
                     process = psutil.Process(pid)
-                    connections = process.connections(kind='inet')
-                    for conn in connections:
+                    
+                    for conn in process.connections(kind='inet'):
                         if conn.status == 'ESTABLISHED' and conn.raddr:
-                            remote_ip = conn.raddr.ip
-                            if remote_ip not in roblox_ips:
-                                roblox_ips.append(remote_ip)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+                            # Create malformed packets that will cause data corruption
+                            for i in range(10):  # Send multiple bad packets
+                                # IP header fields
+                                ip_ihl = 5
+                                ip_ver = 4
+                                ip_tos = 0
+                                ip_tot_len = 40  # IP header (20) + UDP header (8) + data (12)
+                                ip_id = random.randint(10000, 65535)
+                                ip_frag_off = 0
+                                ip_ttl = 64
+                                ip_proto = socket.IPPROTO_UDP
+                                ip_check = 0
+                                ip_saddr = socket.inet_aton(conn.laddr.ip)
+                                ip_daddr = socket.inet_aton(conn.raddr.ip)
+                                
+                                ip_ihl_ver = (ip_ver << 4) + ip_ihl
+                                
+                                # Build IP header
+                                ip_header = struct.pack('!BBHHHBBH4s4s', 
+                                    ip_ihl_ver, ip_tos, ip_tot_len, ip_id, 
+                                    ip_frag_off, ip_ttl, ip_proto, ip_check, 
+                                    ip_saddr, ip_daddr)
+                                
+                                # UDP header fields
+                                udp_sport = conn.laddr.port
+                                udp_dport = conn.raddr.port
+                                udp_len = 20  # UDP header (8) + data (12)
+                                udp_check = 0
+                                
+                                # Build UDP header
+                                udp_header = struct.pack('!HHHH', 
+                                    udp_sport, udp_dport, udp_len, udp_check)
+                                
+                                # Create incorrect data payload to trigger Error 277
+                                data = struct.pack('!III', 0xFFFFFFFF, 0x00000002, 0xFF00AA00)
+                                
+                                # Send packet
+                                packet = ip_header + udp_header + data
+                                s.sendto(packet, (conn.raddr.ip, conn.raddr.port))
+                                corrupt_packets += 1
+                                
+                except Exception as e:
+                    print(f"Error for process {pid}: {e}")
+                    
+            if corrupt_packets > 0:
+                return True, f"Injected {corrupt_packets} corrupt packets"
+            else:
+                return False, "No packets were sent"
+                
         except Exception as e:
-            print(f"Error getting Roblox IPs: {e}")
-        
-        return roblox_ips
+            print(f"Error injecting packets: {e}")
+            return False, f"Error: {str(e)}"
 
-    def block_roblox_ips(self, ips):
-        """Block Roblox IPs using Windows Firewall"""
-        if platform.system() != "Windows":
-            return False, "Firewall blocking only works on Windows"
-        
+    def process_memory_manipulation(self, roblox_pids):
+        """Manipulate Roblox process memory to cause Error 277"""
         try:
-            # First, remove any existing rules with the same name
-            self.remove_firewall_rules()
+            # This approach directly modifies memory in the Roblox process
+            # to corrupt network-related data structures
             
-            # Block the entire Roblox subnet - this is more effective than individual IPs
-            # Create outbound block rule
-            cmd_out = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=out action=block remoteip=128.116.0.0/16'
-            subprocess.run(cmd_out, shell=True, check=True)
-            
-            # Create inbound block rule
-            cmd_in = f'netsh advfirewall firewall add rule name="{self.firewall_rule_name}" dir=in action=block remoteip=128.116.0.0/16'
-            subprocess.run(cmd_in, shell=True, check=True)
-            
-            return True, "Blocked Roblox subnet"
+            # Import required memory manipulation libraries
+            try:
+                import ctypes
+                from ctypes import wintypes
+                
+                # Windows API constants
+                PROCESS_VM_READ = 0x0010
+                PROCESS_VM_WRITE = 0x0020
+                PROCESS_VM_OPERATION = 0x0008
+                PROCESS_QUERY_INFORMATION = 0x0400
+                
+                # Combine all required access rights
+                PROCESS_ALL_ACCESS = (PROCESS_VM_READ | PROCESS_VM_WRITE | 
+                                     PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION)
+                
+                # Get handles to functions needed
+                kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+                
+                # Function prototypes
+                kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+                kernel32.OpenProcess.restype = wintypes.HANDLE
+                
+                kernel32.VirtualQueryEx.argtypes = [wintypes.HANDLE, wintypes.LPCVOID, 
+                                                   ctypes.POINTER(wintypes.MEMORY_BASIC_INFORMATION),
+                                                   ctypes.c_size_t]
+                kernel32.VirtualQueryEx.restype = ctypes.c_size_t
+                
+                kernel32.ReadProcessMemory.argtypes = [wintypes.HANDLE, wintypes.LPCVOID,
+                                                     wintypes.LPVOID, ctypes.c_size_t,
+                                                     ctypes.POINTER(ctypes.c_size_t)]
+                kernel32.ReadProcessMemory.restype = wintypes.BOOL
+                
+                kernel32.WriteProcessMemory.argtypes = [wintypes.HANDLE, wintypes.LPVOID,
+                                                      wintypes.LPCVOID, ctypes.c_size_t,
+                                                      ctypes.POINTER(ctypes.c_size_t)]
+                kernel32.WriteProcessMemory.restype = wintypes.BOOL
+                
+                # Define memory information structure
+                class MEMORY_BASIC_INFORMATION(ctypes.Structure):
+                    _fields_ = [
+                        ("BaseAddress", ctypes.c_void_p),
+                        ("AllocationBase", ctypes.c_void_p),
+                        ("AllocationProtect", wintypes.DWORD),
+                        ("RegionSize", ctypes.c_size_t),
+                        ("State", wintypes.DWORD),
+                        ("Protect", wintypes.DWORD),
+                        ("Type", wintypes.DWORD)
+                    ]
+                
+                # Memory constants
+                MEM_COMMIT = 0x1000
+                PAGE_READWRITE = 0x04
+                
+                # Find network-related memory in Roblox
+                for pid in roblox_pids:
+                    process_handle = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+                    if not process_handle:
+                        continue
+                        
+                    try:
+                        # Search for memory regions with RW access
+                        address = 0
+                        mem_info = MEMORY_BASIC_INFORMATION()
+                        
+                        # Search pattern for network-related structures
+                        # Keywords that might appear in network code
+                        patterns = [
+                            b'socket', b'connect', b'recv', b'send', 
+                            b'WSA', b'tcp', b'udp', b'http'
+                        ]
+                        
+                        modified_regions = 0
+                        
+                        # Scan memory regions
+                        while kernel32.VirtualQueryEx(process_handle, address, 
+                                                     ctypes.byref(mem_info), 
+                                                     ctypes.sizeof(mem_info)):
+                            
+                            # Check if this is a committed RW region
+                            if (mem_info.State == MEM_COMMIT and 
+                                mem_info.Protect == PAGE_READWRITE and
+                                mem_info.RegionSize < 10485760):  # Limit to manageable regions
+                                
+                                # Read memory region
+                                buffer = ctypes.create_string_buffer(mem_info.RegionSize)
+                                bytes_read = ctypes.c_size_t()
+                                
+                                if kernel32.ReadProcessMemory(
+                                    process_handle, mem_info.BaseAddress, 
+                                    buffer, mem_info.RegionSize, ctypes.byref(bytes_read)):
+                                    
+                                    # Check for patterns
+                                    buffer_content = buffer.raw[:bytes_read.value]
+                                    for pattern in patterns:
+                                        if pattern in buffer_content:
+                                            # Found network-related memory, store original
+                                            if self.original_data is None:
+                                                self.original_data = (pid, mem_info.BaseAddress, buffer_content)
+                                            
+                                            # Modify to corrupt but not crash
+                                            # Replace some values to create network errors
+                                            modified_buffer = bytearray(buffer_content)
+                                            
+                                            # Find likely socket handle or descriptor values
+                                            # and corrupt them to invalid values
+                                            for i in range(0, len(modified_buffer) - 4, 4):
+                                                # Check for potential socket values
+                                                val = int.from_bytes(modified_buffer[i:i+4], byteorder='little')
+                                                if 4 <= val <= 65535:  # Typical socket handle range
+                                                    # Corrupt to invalid socket handle
+                                                    modified_buffer[i:i+4] = (0xFFFFFFFF).to_bytes(4, byteorder='little')
+                                                    break
+                                            
+                                            # Write corrupted data back
+                                            bytes_written = ctypes.c_size_t()
+                                            if kernel32.WriteProcessMemory(
+                                                process_handle, mem_info.BaseAddress,
+                                                modified_buffer, len(modified_buffer),
+                                                ctypes.byref(bytes_written)):
+                                                modified_regions += 1
+                                                break  # Move to next region after modifying this one
+                            
+                            # Move to next memory region
+                            address = mem_info.BaseAddress + mem_info.RegionSize
+                            
+                        kernel32.CloseHandle(process_handle)
+                        
+                        if modified_regions > 0:
+                            return True, f"Modified {modified_regions} memory regions"
+                    
+                    except Exception as inner_e:
+                        print(f"Error in memory manipulation: {inner_e}")
+                        kernel32.CloseHandle(process_handle)
+                
+                return False, "No suitable memory regions found"
+                
+            except ImportError:
+                return False, "Required memory manipulation libraries not available"
+                
         except Exception as e:
-            print(f"Error blocking IPs: {e}")
-            return False, f"Error blocking IPs: {str(e)}"
-
-    def remove_firewall_rules(self):
-        """Remove all firewall rules created by this tool"""
-        if platform.system() != "Windows":
-            return
-        
-        try:
-            cmd = f'netsh advfirewall firewall delete rule name="{self.firewall_rule_name}"'
-            subprocess.run(cmd, shell=True)
-        except Exception as e:
-            print(f"Error removing firewall rules: {e}")
+            print(f"Error in process memory manipulation: {e}")
+            return False, f"Error: {str(e)}"
 
     def start_dupe(self):
-        """Start the duping process by blocking Roblox IPs"""
+        """Start the duping process using socket/memory manipulation"""
         # Check if already duping
         if self.dupe_active:
             return
@@ -593,49 +764,59 @@ class TactTool:
         # Set flag to indicate duping is active
         self.dupe_active = True
         
-        # Function to block Roblox IPs
-        def block_roblox_connection():
+        # Function to trigger Error 277 via socket/memory manipulation
+        def trigger_error_277():
             try:
-                # Check if running on Windows
-                if platform.system() != "Windows":
-                    print("IP blocking is only supported on Windows")
+                # Find Roblox processes
+                roblox_pids = self.find_roblox_processes()
+                
+                if not roblox_pids:
+                    print("No Roblox processes found")
                     self.root.after(0, lambda: self.dupe_status.config(
-                        text="Windows required", 
+                        text="No Roblox running", 
                         fg=COLORS["warning"]
                     ))
                     return
                 
-                # Get Roblox IPs
-                roblox_ips = self.get_roblox_ips()
+                print(f"Found {len(roblox_pids)} Roblox processes")
                 
-                if not roblox_ips:
-                    print("No Roblox IPs found")
-                    self.root.after(0, lambda: self.dupe_status.config(
-                        text="No Roblox connections", 
-                        fg=COLORS["warning"]
-                    ))
-                    return
-                
-                print(f"Found {len(roblox_ips)} Roblox IPs: {roblox_ips}")
-                
-                # Block the IPs
-                success, message = self.block_roblox_ips(roblox_ips)
-                
-                if success:
-                    print(f"Successfully blocked Roblox IPs: {message}")
-                else:
-                    print(f"Failed to block Roblox IPs: {message}")
-                    self.root.after(0, lambda: self.dupe_status.config(
-                        text=message, 
-                        fg=COLORS["warning"]
-                    ))
-                
+                # Try direct packet injection first
+                try:
+                    import struct
+                    success, message = self.inject_data_loss_packets(roblox_pids)
+                    if success:
+                        print(f"Successfully injected packets: {message}")
+                    else:
+                        print(f"Failed to inject packets: {message}")
+                        
+                        # Fall back to process memory manipulation if packet injection fails
+                        success, message = self.process_memory_manipulation(roblox_pids)
+                        if success:
+                            print(f"Successfully manipulated memory: {message}")
+                        else:
+                            print(f"Failed to manipulate memory: {message}")
+                            self.root.after(0, lambda: self.dupe_status.config(
+                                text="Trigger failed", 
+                                fg=COLORS["warning"]
+                            ))
+                except ImportError as ie:
+                    print(f"Import error: {ie}")
+                    success, message = self.process_memory_manipulation(roblox_pids)
+                    if success:
+                        print(f"Successfully manipulated memory: {message}")
+                    else:
+                        print(f"Failed to manipulate memory: {message}")
+                        self.root.after(0, lambda: self.dupe_status.config(
+                            text="Failed to manipulate memory", 
+                            fg=COLORS["warning"]
+                        ))
+                        
                 # Keep the thread alive while duping is active
                 while self.dupe_active:
                     time.sleep(0.5)
                     
                 # Clean up when duping ends
-                self.remove_firewall_rules()
+                self.cleanup_duping()
                 
             except Exception as e:
                 print(f"Error in dupe thread: {e}")
@@ -646,10 +827,53 @@ class TactTool:
             finally:
                 print("Dupe thread stopped")
         
-        # Start thread to handle IP blocking
-        self.dupe_thread = threading.Thread(target=block_roblox_connection)
+        # Start thread to handle the duping
+        self.dupe_thread = threading.Thread(target=trigger_error_277)
         self.dupe_thread.daemon = True
         self.dupe_thread.start()
+
+    def cleanup_duping(self):
+        """Clean up after duping"""
+        # Close any sockets we created
+        for sock in self.roblox_sockets:
+            try:
+                sock.close()
+            except:
+                pass
+        self.roblox_sockets = []
+        
+        # Restore original memory if we modified it
+        if self.original_data:
+            try:
+                pid, address, original_buffer = self.original_data
+                
+                # Import ctypes to work with memory
+                import ctypes
+                from ctypes import wintypes
+                
+                # Windows API constants
+                PROCESS_VM_WRITE = 0x0020
+                PROCESS_VM_OPERATION = 0x0008
+                PROCESS_ALL_ACCESS = PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+                
+                # Get handle to kernel32
+                kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+                
+                # Open process
+                process_handle = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+                if process_handle:
+                    # Write original data back
+                    bytes_written = ctypes.c_size_t()
+                    kernel32.WriteProcessMemory(
+                        process_handle, address,
+                        original_buffer, len(original_buffer),
+                        ctypes.byref(bytes_written)
+                    )
+                    kernel32.CloseHandle(process_handle)
+            except Exception as e:
+                print(f"Error restoring memory: {e}")
+            
+            self.original_data = None
 
     def end_dupe(self):
         """End the duping process"""
@@ -663,8 +887,8 @@ class TactTool:
             except:
                 pass
         
-        # Make sure all firewall rules are removed
-        self.remove_firewall_rules()
+        # Clean up duping resources
+        self.cleanup_duping()
         
         # Update UI
         self.dupe_button.config(state=tk.NORMAL)
@@ -677,8 +901,8 @@ class TactTool:
         if self.dupe_active:
             self.end_dupe()
         
-        # Remove any remaining firewall rules
-        self.remove_firewall_rules()
+        # Clean up duping resources
+        self.cleanup_duping()
         
         self.root.quit()
 
@@ -696,9 +920,9 @@ class TactTool:
         self.root.geometry(f"+{x}+{y}")
 
     def cleanup(self):
-        """Clean up temporary files and remove firewall rules"""
-        # Make sure all firewall rules are removed
-        self.remove_firewall_rules()
+        """Clean up resources"""
+        # Clean up duping-related resources
+        self.cleanup_duping()
 
 def main():
     """Main entry point"""
