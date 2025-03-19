@@ -31,6 +31,12 @@
             "name": "2a8ead02-ddae-4dc2-8f20-3b591cf74b14",
             "uses_remaining": 0,
             "hwid": null
+        },
+        {
+            "key": "a71981b2-a0bd-4df8-98b2-1fbbddbe6a4d",
+            "name": "a71981b2-a0bd-4df8-98b2-1fbbddbe6a4d",
+            "uses_remaining": 5,
+            "hwid": null
         }
     ]
 }
