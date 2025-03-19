@@ -245,12 +245,20 @@ class TactTool:
         threading.Thread(target=self._verify_license, args=(key,), daemon=True).start()
     
     def _verify_license(self, key):
-        """Verify license in background thread"""
-        # Verify the license
-        success, user_data, message = verify_license(key, KEYS_FILE)
-        
-        # Update UI from main thread
-        self.root.after(0, lambda: self._update_login_ui(success, user_data, message, key))
+        """Verify license in background thread with better error handling"""
+        try:
+            # Verify the license
+            success, user_data, message = verify_license(key, KEYS_FILE)
+            
+            # Update UI from main thread
+            self.root.after(0, lambda: self._update_login_ui(success, user_data, message, key))
+        except Exception as e:
+            error_msg = f"Verification error: {str(e)}"
+            self.root.after(0, lambda: self._update_login_ui(False, None, error_msg, key))
+            
+        if not success:
+            # Log failed attempts for security
+            print(f"Failed login attempt with key: {key[:4]}***")
     
     def _update_login_ui(self, success, user_data, message, key):
         """Update login UI based on verification result"""
